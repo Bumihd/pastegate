@@ -14,7 +14,7 @@ It has two parts:
 1. **A browser extension** (Chrome, Edge). It checks what you paste.
 2. **A server** you run yourself. It collects the warnings and shows them in a dashboard.
 
-Website: https://pastegate.zerotrustlab.de
+Website: https://pastegate.zerotrustlab.dev
 
 ## What gets detected
 
