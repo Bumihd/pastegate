@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pastegate</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      width: 300px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      font-size: 13px;
+      background: #0a0a0a;
+      color: #e4e4e7;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 15px;
+      font-weight: 500;
+      letter-spacing: -0.2px;
+    }
+    .logo span { color: #22c55e; }
+
+    .lang-switch {
+      display: flex;
+      gap: 3px;
+    }
+    .lang-switch[hidden] { display: none; }
+    .lang-btn {
+      padding: 2px 7px;
+      border-radius: 4px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: transparent;
+      color: #71717a;
+      font-size: 10px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .lang-btn.active {
+      background: #22c55e;
+      color: #000;
+      border-color: #22c55e;
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .status-group { display: flex; align-items: center; gap: 7px; }
+    .status-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: #22c55e;
+      box-shadow: 0 0 6px rgba(34,197,94,0.5);
+    }
+    .status-dot.off { background: #52525b; box-shadow: none; }
+    .status-text { font-size: 12px; color: #71717a; }
+
+    .switch { position: relative; width: 36px; height: 20px; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute; inset: 0;
+      background: #27272a; border-radius: 10px;
+      cursor: pointer; transition: background .2s;
+    }
+    .slider::before {
+      content: ''; position: absolute;
+      width: 14px; height: 14px;
+      left: 3px; bottom: 3px;
+      background: #71717a; border-radius: 50%;
+      transition: transform .2s, background .2s;
+    }
+    .switch input:checked + .slider { background: rgba(34,197,94,0.2); }
+    .switch input:checked + .slider::before { transform: translateX(16px); background: #22c55e; }
+
+    .stats {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 1px; background: rgba(255,255,255,0.08);
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .stat {
+      background: #0a0a0a;
+      padding: 14px 16px;
+      text-align: center;
+    }
+    .stat-num { font-size: 24px; font-weight: 700; color: #fff; line-height: 1; }
+    .stat-lbl { font-size: 10px; color: #52525b; margin-top: 4px;
+      text-transform: uppercase; letter-spacing: .5px; }
+
+    .server-section {
+      padding: 12px 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .section-title {
+      font-size: 10px; font-weight: 600; color: #52525b;
+      text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px;
+    }
+    .server-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 10px;
+      background: #111; border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 6px; font-size: 12px;
+    }
+    .server-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .server-dot.connected    { background: #22c55e; }
+    .server-dot.disconnected { background: #52525b; }
+    .server-url-text {
+      color: #71717a; flex: 1;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+
+    .queue-row {
+      padding: 6px 16px 10px;
+      font-size: 11px; color: #52525b; text-align: center;
+    }
+
+    .footer {
+      padding: 8px 16px;
+      text-align: center;
+      font-size: 10px; color: #3f3f46;
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo"><img src="../icons/logo.svg" alt="" width="18" height="18">Paste<span>gate</span></div>
+  <!-- Org language + English, filled by popup.js; hidden when the org language is en -->
+  <div class="lang-switch" id="lang-switch" role="group" hidden></div>
+</div>
+
+<div class="toggle-row">
+  <div class="status-group">
+    <div class="status-dot" id="status-dot"></div>
+    <span class="status-text" id="status-text">Aktiv</span>
+  </div>
+  <label class="switch">
+    <input type="checkbox" id="enable-toggle">
+    <span class="slider"></span>
+  </label>
+</div>
+
+<div class="stats">
+  <div class="stat">
+    <div class="stat-num" id="stat-today">0</div>
+    <div class="stat-lbl" id="lbl-today">Heute</div>
+  </div>
+  <div class="stat">
+    <div class="stat-num" id="stat-total">0</div>
+    <div class="stat-lbl" id="lbl-total">Gesamt</div>
+  </div>
+</div>
+
+<div class="server-section">
+  <div class="section-title" id="lbl-server">Server</div>
+  <div class="server-row">
+    <div class="server-dot" id="server-dot"></div>
+    <span class="server-url-text" id="server-url-label">–</span>
+  </div>
+</div>
+
+<div class="queue-row" id="queue-status">–</div>
+
+<div class="footer" id="version"></div>
+
+<!-- config.js is only present if the extension was built by the dashboard -->
+<script src="../config.js" onerror="void 0"></script>
+<script src="../locales/en.js"></script>
+<script src="../locales/de.js"></script>
+<script src="../locales/fr.js"></script>
+<script src="../locales/es.js"></script>
+<script src="../i18n.js"></script>
+<script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pastegate</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%3E%20%3Crect%20width%3D%2224%22%20height%3D%2224%22%20rx%3D%225.5%22%20fill%3D%22%2312181f%22/%3E%20%3Crect%20x%3D%225.5%22%20y%3D%225%22%20width%3D%2213%22%20height%3D%2215.5%22%20rx%3D%222.3%22%20fill%3D%22none%22%20stroke%3D%22%23e6edf3%22%20stroke-width%3D%221.9%22/%3E%20%3Crect%20x%3D%229%22%20y%3D%223.3%22%20width%3D%226%22%20height%3D%223.4%22%20rx%3D%221.1%22%20fill%3D%22%23e6edf3%22/%3E%20%3Crect%20x%3D%223%22%20y%3D%2211%22%20width%3D%2218%22%20height%3D%223.6%22%20rx%3D%221.8%22%20fill%3D%22%2322c55e%22/%3E%3C/svg%3E" />
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      :root {
+        /* Enterprise-Security-Console – Design-Tokens */
+        /* Surfaces */
+        --bg-canvas:   #0b0f14;
+        --bg-surface:  #12181f;
+        --bg-elevated: #1a212b;
+        --bg-sidebar:  #090c11;   /* slightly darker than canvas */
+        /* Borders */
+        --border:        #232b35;
+        --border-strong: #2d3742;
+        /* Text */
+        --text:       #e6edf3;
+        --text-muted: #8b97a6;
+        --text-hint:  #5c6773;
+        /* Brand (use sparingly) */
+        --accent:        #22c55e;
+        --accent-dim:    rgba(34,197,94,0.12);
+        --accent-border: rgba(34,197,94,0.28);
+        /* Severity */
+        --sev-critical: #f0563f;
+        --sev-high:     #f5a524;
+        --sev-medium:   #3b82f6;
+        --sev-low:      #6b7785;
+        /* Radii */
+        --radius:    6px;
+        --radius-lg: 8px;
+        --radius-xl: 8px;
+
+        /* Legacy aliases → map onto the new tokens so that all existing
+           pages inherit the new look without individual changes. */
+        --bg:      var(--bg-canvas);
+        --bg2:     var(--bg-surface);
+        --bg3:     var(--bg-elevated);
+        --bg4:     #232b35;
+        --text2:   var(--text);
+        --muted:   var(--text-muted);
+        --muted2:  var(--text-hint);
+        --danger:  var(--sev-critical);
+        --warning: var(--sev-high);
+        --info:    var(--sev-medium);
+        --accent2: var(--accent);
+        --success: var(--accent);
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter',
+                     system-ui, sans-serif;
+        background: var(--bg-canvas);
+        color: var(--text);
+        font-size: 13px;
+        line-height: 1.5;
+        min-height: 100vh;
+        font-variant-numeric: tabular-nums;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      /* Only two font weights: 400 and 500. Clamp heavier weights. */
+      b, strong, h1, h2, h3, h4 { font-weight: 500; }
+
+      /* Scrollbar */
+      ::-webkit-scrollbar { width: 6px; height: 6px; }
+      ::-webkit-scrollbar-track { background: var(--bg-canvas); }
+      ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+
+      /* Inputs global */
+      input, select, textarea {
+        background: var(--bg-elevated) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: var(--radius) !important;
+        color: var(--text) !important;
+        outline: none !important;
+        transition: border-color .15s, box-shadow .15s !important;
+      }
+      input:focus, select:focus, textarea:focus {
+        border-color: var(--accent) !important;
+        box-shadow: 0 0 0 2px var(--accent-dim) !important;
+      }
+      input::placeholder { color: var(--text-hint) !important; }
+
+      /* Visible keyboard focus (quality floor) */
+      a:focus-visible, button:focus-visible {
+        outline: 2px solid var(--accent); outline-offset: 1px;
+      }
+
+      /* Buttons global */
+      button { font-family: inherit; }
+
+      /* Code / IDs / timestamps – mono */
+      code {
+        font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
+        font-size: 0.9em;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        * { transition: none !important; animation: none !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

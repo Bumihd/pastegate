@@ -1,0 +1,135 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend (tests)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: pastegate
+          POSTGRES_PASSWORD: pastegate
+          POSTGRES_DB: pastegate_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U pastegate"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://pastegate:pastegate@localhost:5432/pastegate_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+      - name: Install dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+      # Fresh installs go through create_all + stamp head, existing systems through
+      # alembic upgrade. The newer migrations are rolled back and re-applied on top
+      # of the model schema; afterwards schema and models must be identical.
+      - name: Migrations roundtrip
+        working-directory: backend
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+          SECRET_KEY: ci-only-secret-key-0000000000000000000000000000000000000000
+          HMAC_SALT: ci-only-hmac-salt-00000000000000000000000000000000000000000
+        run: |
+          python -c "from app.core.database import Base, engine; import app.models.models; Base.metadata.create_all(engine)"
+          alembic stamp head
+          alembic downgrade 0004_event_host
+          alembic upgrade head
+          alembic check
+          python -c "from app.core.database import Base, engine; import app.models.models; Base.metadata.drop_all(engine)"
+          psql "$DATABASE_URL" -c "DROP TABLE IF EXISTS alembic_version"
+      - name: Tests
+        working-directory: backend
+        run: python -m pytest -q
+
+  dashboard:
+    name: Dashboard (typecheck + build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+      - name: Install dependencies
+        working-directory: dashboard
+        run: npm ci
+      - name: Rule names in sync with extension
+        working-directory: dashboard
+        run: npm run sync-rules -- --check
+      - name: Typecheck
+        working-directory: dashboard
+        run: npx tsc --noEmit
+      - name: Build
+        working-directory: dashboard
+        run: npm run build
+
+  extension:
+    name: Extension (tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check
+        run: for f in extension/*.js extension/locales/*.js extension/popup/*.js; do node --check "$f"; done
+      - name: Detection tests
+        run: node extension/tests/detect.test.js
+      - name: Locale tests
+        run: node extension/tests/i18n.test.js
+
+  extension-e2e:
+    name: Extension (browser tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: extension/tests/e2e/package-lock.json
+      - name: Install
+        working-directory: extension/tests/e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Paste bypass in real Chromium
+        working-directory: extension/tests/e2e
+        run: npm test
+
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: pip-audit
+        run: |
+          pip install pip-audit
+          pip-audit -r backend/requirements.txt
+      - name: npm audit
+        working-directory: dashboard
+        run: npm audit --audit-level=moderate

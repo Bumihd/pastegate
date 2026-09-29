@@ -1,0 +1,52 @@
+# ---- Secrets / env (NEVER commit) ----
+.env
+.env.*
+!.env.example
+SETUP_TOKEN
+secrets/
+*.pem
+*.key
+*.crt
+*.p12
+
+# Generated extension config (contains server_url + API key)
+extension/config.js
+
+# ---- Python / FastAPI ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+*.log
+
+# ---- Node / Vite / React ----
+node_modules/
+dist/
+dist-ssr/
+.vite/
+*.local
+
+# Frontend build copied into the backend (not source code)
+backend/static/assets/
+backend/static/index.html
+
+# ---- Build artifacts / packages ----
+*.zip
+build/
+
+# ---- Database / backups ----
+*.sql
+*.sql.gz
+*.sqlite
+*.db
+/var/backups/
+
+# ---- OS / Editor ----
+.DS_Store
+Thumbs.db
+.idea/
+*.swp

@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pastegate — editor test harness</title>
+<style>
+  :root { --bg:#0b0f14; --surface:#12181f; --border:#232b35; --text:#e6edf3; --muted:#8b97a6; --ok:#22c55e; --bad:#f0563f; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; padding:24px; }
+  h1 { font-size:18px; font-weight:500; }
+  h2 { font-size:14px; font-weight:500; margin:24px 0 8px; }
+  p, li { color:var(--muted); font-size:13px; }
+  code { font-family:ui-monospace,'SF Mono',monospace; color:#22c55e; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:14px; }
+  .field { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:12px; }
+  .field label { display:block; font-size:12px; color:var(--muted); margin-bottom:6px; }
+  .editable { min-height:60px; background:#0b0f14; border:1px solid var(--border); border-radius:6px; padding:8px; color:var(--text); outline:none; }
+  input, textarea { width:100%; background:#0b0f14; border:1px solid var(--border); border-radius:6px; padding:8px; color:var(--text); font:inherit; }
+  table { width:100%; border-collapse:collapse; margin-top:8px; }
+  th, td { text-align:left; padding:6px 10px; font-size:12.5px; border-bottom:1px solid var(--border); }
+  th { color:var(--muted); font-weight:500; }
+  .pill { display:inline-block; padding:1px 8px; border-radius:4px; font-size:11px; }
+  .pill.ok { color:var(--ok); background:rgba(34,197,94,.14); border:1px solid rgba(34,197,94,.28); }
+  .pill.bad { color:var(--bad); background:rgba(240,86,63,.14); border:1px solid rgba(240,86,63,.28); }
+  .note { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:14px; }
+</style>
+</head>
+<body>
+  <h1>Pastegate — editor test harness</h1>
+  <div class="note">
+    <p><strong style="color:var(--text)">Purpose:</strong> Repeatable testing of the paste bypass logic across all supported editor types.</p>
+    <p><strong style="color:var(--text)">Detection:</strong> The table below is checked automatically on load (<code>editor-detect.js</code> against the real DOM nodes on this page). Every row must show <span class="pill ok">detected</span>.</p>
+    <p><strong style="color:var(--text)">Insert / selection / focus (manual):</strong> Load the extension (<code>chrome://extensions</code> → Developer mode → Load unpacked; for <code>file://</code> turn on "Allow access to file URLs"). Then paste a test value into each field, e.g. <code>AKIAIOSFODNN7EXAMPLE</code>. Expected: the overlay appears → "Block" inserts nothing; "Paste anyway" inserts at the cursor and keeps focus.</p>
+  </div>
+
+  <h2>Detection self-test</h2>
+  <table id="matrix">
+    <thead><tr><th>Editor type</th><th>expected</th><th>detected</th><th>Status</th></tr></thead>
+    <tbody></tbody>
+  </table>
+
+  <h2>Editor fields</h2>
+  <div class="grid">
+    <div class="field"><label>&lt;input&gt; (native)</label>
+      <input id="ed-input" type="text" placeholder="paste here"></div>
+    <div class="field"><label>&lt;textarea&gt; (native)</label>
+      <textarea id="ed-textarea" rows="3" placeholder="paste here"></textarea></div>
+    <div class="field"><label>generic contenteditable</label>
+      <div id="ed-ce" class="editable" contenteditable="true"></div></div>
+
+    <div class="field"><label>ProseMirror / TipTap</label>
+      <div id="ed-pm" class="editable ProseMirror" contenteditable="true"></div></div>
+    <div class="field"><label>Lexical (Outlook/Facebook)</label>
+      <div id="ed-lex" class="editable" data-lexical-editor="true" contenteditable="true"></div></div>
+    <div class="field"><label>Slate (Notion-like)</label>
+      <div id="ed-slate" class="editable" data-slate-editor="true" contenteditable="true"></div></div>
+    <div class="field"><label>CodeMirror v6</label>
+      <div class="cm-editor"><div id="ed-cm" class="editable cm-content" contenteditable="true"></div></div></div>
+    <div class="field"><label>Monaco (VS Code Web)</label>
+      <div class="monaco-editor"><textarea id="ed-monaco" class="inputarea" rows="2"></textarea></div></div>
+    <div class="field"><label>Quill</label>
+      <div id="ed-quill" class="editable ql-editor" contenteditable="true"></div></div>
+    <div class="field"><label>Draft.js</label>
+      <div data-contents="true"><div id="ed-draft" class="editable" contenteditable="true"></div></div></div>
+  </div>
+
+  <p style="margin-top:24px">Note: the framework fields are stand-ins with the same DOM markers as the real editors, which is enough for the detection test. For full insert/selection/focus behaviour of real SaaS editors see <code>MANUAL_CHECKLIST.md</code>.</p>
+
+  <!-- Single source of the detection logic, same as the extension -->
+  <script src="../editor-detect.js"></script>
+  <script>
+    // Self-Test: erwartete Detection je Feld (root-Knoten, von dem aus gesucht wird).
+    const cases = [
+      ['input',                  'ed-input',    null],
+      ['textarea',               'ed-textarea', null],
+      ['contenteditable',        'ed-ce',       null],
+      ['prosemirror',            'ed-pm',       'prosemirror'],
+      ['lexical',                'ed-lex',      'lexical'],
+      ['slate',                  'ed-slate',    'slate'],
+      ['codemirror',             'ed-cm',       'codemirror'],
+      ['monaco',                 'ed-monaco',   'monaco'],
+      ['quill',                  'ed-quill',    'quill'],
+      ['draftjs',                'ed-draft',    'draftjs'],
+    ];
+    const tbody = document.querySelector('#matrix tbody');
+    let allOk = true;
+    for (const [name, id, expected] of cases) {
+      const got = detectEditorType(document.getElementById(id));
+      const ok = got === expected;
+      allOk = allOk && ok;
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${name}</td><td><code>${expected ?? '— (native path)'}</code></td>`
+        + `<td><code>${got ?? '—'}</code></td>`
+        + `<td><span class="pill ${ok ? 'ok' : 'bad'}">${ok ? 'detected' : 'FAILED'}</span></td>`;
+      tbody.appendChild(tr);
+    }
+    document.title = (allOk ? '✓ ' : '✗ ') + 'Pastegate editor test harness';
+  </script>
+</body>
+</html>

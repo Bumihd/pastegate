@@ -1,0 +1,33 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check version matches tag
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          grep -q "__version__ = '$tag'" backend/app/__init__.py
+          grep -q "\"version\": \"$tag\"" dashboard/package.json
+          grep -q "\"version_name\": \"$tag\"" extension/manifest.json
+      - name: Build source package
+        run: |
+          git archive --format=zip --prefix=pastegate/ -o "pastegate-${GITHUB_REF_NAME}.zip" "$GITHUB_REF_NAME"
+          sha256sum "pastegate-${GITHUB_REF_NAME}.zip" > "pastegate-${GITHUB_REF_NAME}.zip.sha256"
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          notes=$(awk -v v="${GITHUB_REF_NAME#v}" '$0 ~ "^## \\[" v "\\]" {f=1; next} /^## \[/ {f=0} f' CHANGELOG.md)
+          prerelease=""
+          case "$GITHUB_REF_NAME" in *-alpha*|*-beta*|*-rc*) prerelease="--prerelease";; esac
+          gh release create "$GITHUB_REF_NAME" $prerelease --title "Pastegate ${GITHUB_REF_NAME}" \
+            --notes "$notes" pastegate-"${GITHUB_REF_NAME}".zip*

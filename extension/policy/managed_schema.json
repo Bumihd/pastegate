@@ -1,0 +1,31 @@
+{
+  "type": "object",
+  "properties": {
+    "server_url": {
+      "type": "string",
+      "title": "Pastegate Server URL",
+      "description": "URL of the self-hosted Pastegate backend (e.g. https://pastegate.company.com)"
+    },
+    "api_key": {
+      "type": "string",
+      "title": "Pastegate API Key",
+      "description": "API key for authenticating with the Pastegate backend"
+    },
+    "lang": {
+      "type": "string",
+      "title": "Default language",
+      "description": "Organisation UI language (used if the server does not send default_lang): 'de', 'en', 'fr' or 'es'",
+      "enum": [
+        "de",
+        "en",
+        "fr",
+        "es"
+      ]
+    },
+    "user_identity": {
+      "type": "string",
+      "title": "User identity",
+      "description": "Optional identity of the device user (e.g. UPN/e-mail). Overrides the browser profile e-mail. Stored encrypted on the server and only visible to itsec/infosec users (every lookup is audit-logged)."
+    }
+  }
+}
