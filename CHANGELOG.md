@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.0-alpha.3] - 2026-09-29
+
+- New license: Apache License 2.0 (was AGPL v3). If you share or sell Pastegate,
+  you must include the LICENSE and NOTICE files.
+- "Pastegate by Bumihd" in the dashboard and extension popup stays, but is no longer required.
+
 ## [0.1.0-alpha.2] - 2026-09-29
 
 - New license: GNU AGPL v3 (was MIT). If you share or sell a changed version,
@@ -20,5 +26,6 @@ First public release.
 - Dashboard in English, German, French and Spanish
 - Installer for all common Linux systems, and an uninstaller
 
+[0.1.0-alpha.3]: https://github.com/Bumihd/pastegate/releases/tag/v0.1.0-alpha.3
 [0.1.0-alpha.2]: https://github.com/Bumihd/pastegate/releases/tag/v0.1.0-alpha.2
 [0.1.0-alpha.1]: https://github.com/Bumihd/pastegate/releases/tag/v0.1.0-alpha.1
