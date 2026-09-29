@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -133,6 +133,8 @@
       text-align: center;
       font-size: 10px; color: #3f3f46;
     }
+    .footer a { color: inherit; text-decoration: none; }
+    .footer a:hover { color: #71717a; }
   </style>
 </head>
 <body>
@@ -175,7 +177,7 @@
 
 <div class="queue-row" id="queue-status">–</div>
 
-<div class="footer" id="version"></div>
+<div class="footer"><span id="version"></span> · <a href="https://github.com/Bumihd/pastegate" target="_blank" rel="noopener noreferrer">Pastegate by Bumihd</a></div>
 
 <!-- config.js is only present if the extension was built by the dashboard -->
 <script src="../config.js" onerror="void 0"></script>

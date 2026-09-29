@@ -178,6 +178,10 @@ export default function Layout({ children }: { children: ReactNode }) {
             }}>
               <LogOut size={14} />{t('nav_logout')}
             </button>
+            <a href="https://github.com/Bumihd/pastegate" target="_blank" rel="noopener noreferrer"
+              style={{ display: 'block', padding: '6px 10px 0', fontSize: 10.5, color: 'var(--text-hint)', textDecoration: 'none' }}>
+              Pastegate v{__APP_VERSION__} by Bumihd
+            </a>
           </div>
         </div>
       </aside>

@@ -171,7 +171,8 @@ export default function Login() {
           gap: 8, marginTop: 16 }}>
           <LanguageSelect value={lang} onChange={setLang} label={t('lang_label')}
             style={{ padding: '3px 6px', fontSize: 11.5 }} />
-          <span style={{ fontSize: 11, color: 'var(--text-hint)' }}>· Pastegate v{__APP_VERSION__}</span>
+          <a href="https://github.com/Bumihd/pastegate" target="_blank" rel="noopener noreferrer"
+            style={{ fontSize: 11, color: 'var(--text-hint)', textDecoration: 'none' }}>· Pastegate v{__APP_VERSION__} by Bumihd</a>
         </div>
       </div>
     </div>

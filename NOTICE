@@ -1,0 +1,19 @@
+Pastegate
+Copyright (C) 2026 Bumihd
+https://github.com/Bumihd/pastegate
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License version 3 (see LICENSE).
+
+Additional terms under section 7(b) of the GNU AGPL v3:
+
+  If you distribute or run a modified or unmodified version of Pastegate,
+  you must keep the author attribution "Pastegate by Bumihd", with a link to
+  https://github.com/Bumihd/pastegate, visible in the user interface:
+
+    - in the dashboard (sidebar footer and login page), and
+    - in the browser extension popup.
+
+  You may add your own name next to it, but you may not remove or hide it.
+  If you changed the program, you must also give users of your version a
+  link to your own source code (section 13 of the AGPL).

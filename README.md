@@ -1,6 +1,6 @@
 # Pastegate
 
-> **Alpha version (0.1.0-alpha.1).** It works, but it is not finished.
+> **Alpha version (0.1.0-alpha.2).** It works, but it is not finished.
 > Things can still change before version 1.0. Make a backup before you update.
 
 Pastegate stops people from pasting secrets into websites by accident.
@@ -118,4 +118,17 @@ install.sh   installer
 
 ## License
 
-MIT, see [LICENSE](LICENSE).
+Pastegate is open source under the [GNU AGPL v3](LICENSE), with one extra rule in [NOTICE](NOTICE).
+
+In short:
+
+- You can use Pastegate for free, also in your company.
+- You can change it, share it, and even sell it or sell support for it.
+- If you give your version to others, or run it as a service for others,
+  you must publish your source code under the same license.
+- You must keep "Pastegate by Bumihd" with the link visible in the dashboard
+  and in the extension popup.
+
+Using Pastegate inside your own company does not mean you have to publish anything.
+
+This short version is not legal advice. The [LICENSE](LICENSE) and [NOTICE](NOTICE) files are what counts.
