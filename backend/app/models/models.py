@@ -257,6 +257,18 @@ class RevokedToken(Base):
     expires_at: Mapped[datetime]  = mapped_column(DateTime(timezone=True), nullable=False, index=True)
 
 
+# ── SetupState ────────────────────────────────────────────────────
+# Single row (id=1). Once completed=true, every /api/v1/setup/* endpoint is
+# locked, independent of whether the token file still exists.
+
+class SetupState(Base):
+    __tablename__ = 'setup_state'
+
+    id:           Mapped[int]             = mapped_column(Integer, primary_key=True)
+    completed:    Mapped[bool]            = mapped_column(Boolean, nullable=False, default=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 # ── AppSetting ────────────────────────────────────────────────────
 # Organisation-wide settings as key/value (e.g. default_lang).
 

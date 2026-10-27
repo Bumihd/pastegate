@@ -1,12 +1,12 @@
 // ═══════════════════════════════════════════════════════
-// Pastegate · ZeroTrustLab — content.js (combined)
+// Pastegate by Bumihd — content.js (combined)
 // detector.js + content script in a single file
-// Compatible with Chrome (MV3) and Firefox (MV2)
+// Compatible with Chrome and Edge (MV3)
 // ═══════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════
-// Pastegate · ZeroTrustLab — detector.js
-// ~100 detection rules + organisation rules, runs entirely locally
+// Pastegate by Bumihd — detector.js
+// 100 detection rules + organisation rules, runs entirely locally
 // ═══════════════════════════════════════════════════════
 
 const RULES = [

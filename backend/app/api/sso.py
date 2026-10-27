@@ -16,6 +16,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.setup import clear_token_after_login, complete_on_admin_login
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.i18n import _
@@ -168,7 +169,9 @@ async def azure_callback(code: str, state: str, db: Session = Depends(get_db)):
         user.is_active = True
 
     db.add(AuditLog(actor_id=user.id, action='azure_sso_login'))
+    complete_on_admin_login(db, user)
     db.commit()
+    clear_token_after_login(db)
 
     jwt, _jti = create_access_token(subject=user.username)
 
@@ -268,7 +271,9 @@ async def ldap_login(body: LdapLoginRequest, db: Session = Depends(get_db)):
         user.is_active = True
 
     db.add(AuditLog(actor_id=user.id, action='ldap_login'))
+    complete_on_admin_login(db, user)
     db.commit()
+    clear_token_after_login(db)
 
     jwt, _jti = create_access_token(subject=user.username)
     return {

@@ -324,7 +324,7 @@ const fr: Messages = {
   setup_title: 'Configuration initiale',
   setup_subtitle: 'Créez le premier compte administrateur et configurez la liaison avec l\'extension.',
   setup_step_token: 'Jeton de configuration',
-  setup_token_hint: 'Le jeton a été affiché dans le terminal à la fin de l\'installation (fichier /opt/pastegate/SETUP_TOKEN).',
+  setup_token_hint: 'Le jeton a été affiché dans le terminal à la fin de l\'installation (fichier /var/lib/pastegate/SETUP_TOKEN).',
   setup_token_label: 'SETUP_TOKEN',
   setup_step_admin: 'Créer le compte administrateur',
   setup_username: 'Nom d\'utilisateur',

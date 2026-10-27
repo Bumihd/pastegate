@@ -11,11 +11,11 @@ const fr: UserDoc = {
         },
         detection: {
           heading: 'Comment fonctionne la détection ?',
-          text: 'Pastegate utilise plus de 80 règles basées sur des motifs (expressions régulières), exécutées localement dans le navigateur. Aucun texte en clair ne quitte le poste. Seules des métadonnées anonymisées sont transmises au serveur : règle et niveau de gravité, action effectuée, domaine (p. ex. claude.ai) et un hash SHA-256 de l\'URL complète.',
+          text: 'Pastegate utilise 100 règles basées sur des motifs (expressions régulières), exécutées localement dans le navigateur. Aucun texte en clair ne quitte le poste. Seules des métadonnées anonymisées sont transmises au serveur : règle et niveau de gravité, action effectuée, domaine (p. ex. claude.ai) et un hash SHA-256 de l\'URL complète.',
         },
         severity: {
           heading: 'Niveaux de gravité',
-          text: 'Critique : clés AWS/GCP/Azure, clés privées, mots de passe en clair\nÉlevé : tokens GitHub/GitLab, JWT, API keys génériques\nMoyen : adresses e-mail, IBAN, numéros de carte bancaire\nFaible : contenu potentiellement sensible (détection heuristique)',
+          text: 'Les règles intégrées utilisent trois niveaux :\nCritique : clés AWS, Azure, OpenAI et Anthropic, tokens GitHub/GitLab, clés privées, chaînes de connexion aux bases de données, mots de passe dans les URL, numéros de carte bancaire, numéros de carte d\'identité et de passeport allemands, numéros de sécurité sociale (DE, AT, CH, US, UK)\nÉlevé : JWT, tokens Bearer, tokens Slack, mots de passe et secrets dans le texte, IBAN, numéro d\'identification fiscale (DE)\nMoyen : ARN AWS, clés de test Stripe, DSN Sentry, numéros de TVA, numéros de téléphone avec nom, chaînes à forte entropie (heuristique)',
         },
         language: {
           heading: 'Langue de l\'extension',
@@ -28,7 +28,7 @@ const fr: UserDoc = {
       items: {
         install: {
           heading: 'Installation',
-          text: 'Pastegate s\'installe avec un seul script. Celui-ci met en place automatiquement PostgreSQL, le backend FastAPI, le dashboard React et nginx.',
+          text: 'L\'installateur demande le domaine ou l\'adresse IP et le mode TLS : certificat propre, Let\'s Encrypt, auto-signé ou fonctionnement derrière un reverse proxy ou une passerelle (TLS se termine en amont ; Pastegate ne sert que du HTTP). Si Podman ou Docker est disponible, l\'application et la base de données tournent en conteneurs ; sinon, tout est installé directement sur le système.\n\nÀ la fin, il affiche une **URL de configuration** et un **token de configuration** :\n1. Ouvrir `https://<votre-domaine>/setup` dans le navigateur\n2. Saisir le token de configuration\n3. Créer le compte administrateur et la première API key dans l\'assistant de configuration\n\nToutes les options : `bash install.sh --help`',
           code: 'sudo bash install.sh',
         },
         org_language: {
@@ -41,7 +41,7 @@ const fr: UserDoc = {
         },
         mdm: {
           heading: 'Déploiement MDM (Intune, Jamf, GPO)',
-          text: '1. Forcer l\'installation de l\'extension via une Chrome policy (ExtensionInstallForcelist ou ExtensionSettings)\n2. Facultatif : fournir `server_url`, `api_key` et `lang` (de, en, fr, es) comme configuration gérée de l\'extension\n3. Affecter la policy aux groupes d\'appareils cibles\n\nDétails : voir le guide MDM dans le dashboard.',
+          text: '1. Forcer l\'installation de l\'extension via une policy Chrome ou Edge (ExtensionInstallForcelist ou ExtensionSettings)\n2. Facultatif : fournir `server_url`, `api_key` et `lang` (de, en, fr, es) comme configuration gérée de l\'extension\n3. Affecter la policy aux groupes d\'appareils cibles\n\nDétails : voir le guide MDM dans le dashboard.',
         },
         api_keys: {
           heading: 'Gérer les API keys',
@@ -66,7 +66,7 @@ const fr: UserDoc = {
         },
         identity: {
           heading: 'Afficher les identités',
-          text: 'Pour tous les rôles, événements et appareils n\'apparaissent que sous forme de hash d\'appareil. Les utilisateurs itsec et infosec peuvent utiliser « Afficher l\'identité » sous **Appareils** ou **Événements** pour voir à qui appartient un appareil (e-mail du profil ou identité définie par MDM, extension 2.1 ou ultérieure).\n\nAucune demande n\'est nécessaire, mais chaque consultation est consignée dans le journal d\'audit avec nom d\'utilisateur, appareil, heure et IP, et reste visible par la protection des données.',
+          text: 'Pour tous les rôles, événements et appareils n\'apparaissent que sous forme de hash d\'appareil. Les utilisateurs itsec et infosec peuvent utiliser « Afficher l\'identité » sous **Appareils** ou **Événements** pour voir à qui appartient un appareil (e-mail du profil ou identité définie par MDM).\n\nAucune demande n\'est nécessaire, mais chaque consultation est consignée dans le journal d\'audit avec nom d\'utilisateur, appareil, heure et IP, et reste visible par la protection des données.',
         },
         incident: {
           heading: 'Réponse à incident',

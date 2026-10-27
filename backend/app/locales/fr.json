@@ -27,6 +27,8 @@
   "setup.admin_exists": "Un compte administrateur existe déjà.",
   "setup.no_admin": "Aucun compte administrateur n'existe. Veuillez d'abord en créer un.",
   "setup.cannot_complete": "Impossible de terminer la configuration : aucun administrateur n'a été créé.",
+  "setup.too_many_attempts": "Trop de requêtes de configuration. Veuillez patienter {seconds} secondes.",
+  "setup.totp_already_enabled": "L'authentification à deux facteurs est déjà active et ne peut pas être modifiée via la configuration.",
   "users.username_taken": "Ce nom d'utilisateur est déjà pris.",
   "users.not_found": "Utilisateur introuvable.",
   "users.cannot_deactivate_self": "Vous ne pouvez pas désactiver votre propre compte.",

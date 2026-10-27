@@ -27,6 +27,8 @@
   "setup.admin_exists": "An admin account already exists.",
   "setup.no_admin": "No admin account exists. Please create an admin first.",
   "setup.cannot_complete": "Setup cannot be completed: no admin has been created.",
+  "setup.too_many_attempts": "Too many setup requests. Please wait {seconds} seconds.",
+  "setup.totp_already_enabled": "Two-factor authentication is already active and cannot be changed through setup.",
   "users.username_taken": "Username is already taken.",
   "users.not_found": "User not found.",
   "users.cannot_deactivate_self": "You cannot deactivate your own account.",

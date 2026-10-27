@@ -11,11 +11,11 @@ const de: UserDoc = {
         },
         detection: {
           heading: 'Wie funktioniert die Erkennung?',
-          text: 'Pastegate verwendet über 80 regelbasierte Muster (reguläre Ausdrücke), die lokal im Browser ausgeführt werden. Kein Klartext verlässt den Client. An den Server gehen nur anonymisierte Metadaten: Regel und Schweregrad, die ausgeführte Aktion, die Domain (z. B. claude.ai) und ein SHA-256-Hash der vollständigen URL.',
+          text: 'Pastegate verwendet 100 regelbasierte Muster (reguläre Ausdrücke), die lokal im Browser ausgeführt werden. Kein Klartext verlässt den Client. An den Server gehen nur anonymisierte Metadaten: Regel und Schweregrad, die ausgeführte Aktion, die Domain (z. B. claude.ai) und ein SHA-256-Hash der vollständigen URL.',
         },
         severity: {
           heading: 'Schweregrade',
-          text: 'Kritisch: AWS/GCP/Azure-Keys, Private Keys, Passwörter im Klartext\nHoch: GitHub/GitLab-Tokens, JWTs, allgemeine API-Keys\nMittel: E-Mail-Adressen, IBANs, Kreditkartennummern\nNiedrig: möglicherweise sensible Inhalte (heuristische Erkennung)',
+          text: 'Die eingebauten Regeln nutzen drei Stufen:\nKritisch: AWS-, Azure-, OpenAI- und Anthropic-Keys, GitHub-/GitLab-Tokens, Private Keys, Datenbank-Connection-Strings, Passwörter in URLs, Kreditkartennummern, deutsche Personalausweis- und Reisepassnummern, Sozialversicherungsnummern (DE, AT, CH, US, UK)\nHoch: JWTs, Bearer-Tokens, Slack-Tokens, Passwörter und Secrets im Text, IBANs, Steuer-ID (DE)\nMittel: AWS-ARNs, Stripe-Test-Keys, Sentry-DSNs, USt-IdNrn., Telefonnummern mit Namen, Zeichenketten mit hoher Entropie (heuristisch)',
         },
         language: {
           heading: 'Sprache der Extension',
@@ -28,7 +28,7 @@ const de: UserDoc = {
       items: {
         install: {
           heading: 'Installation',
-          text: 'Pastegate wird mit einem einzigen Script installiert. Es richtet PostgreSQL, das FastAPI-Backend, das React-Dashboard und nginx automatisch ein.',
+          text: 'Der Installer fragt nach Domain oder IP-Adresse und nach dem TLS-Modus: eigenes Zertifikat, Let\'s Encrypt, self-signed oder Betrieb hinter einem Reverse-Proxy bzw. Gateway (TLS endet dort, Pastegate selbst liefert nur HTTP aus). Sind Podman oder Docker vorhanden, laufen App und Datenbank als Container, sonst installiert er alles direkt auf dem System.\n\nAm Ende zeigt er eine **Setup-URL** und ein **Setup-Token**:\n1. `https://<Ihre-Domain>/setup` im Browser öffnen\n2. Setup-Token eingeben\n3. Im Setup-Wizard das Admin-Konto und den ersten API-Key anlegen\n\nAlle Optionen: `bash install.sh --help`',
           code: 'sudo bash install.sh',
         },
         org_language: {
@@ -41,7 +41,7 @@ const de: UserDoc = {
         },
         mdm: {
           heading: 'MDM-Deployment (Intune, Jamf, GPO)',
-          text: '1. Extension per Chrome-Policy zwangsinstallieren (ExtensionInstallForcelist oder ExtensionSettings)\n2. Optional `server_url`, `api_key` und `lang` (de, en, fr, es) als verwaltete Konfiguration der Extension setzen\n3. Policy den Ziel-Gerätegruppen zuweisen\n\nDetails: siehe MDM-Guide im Dashboard.',
+          text: '1. Extension per Chrome- bzw. Edge-Policy zwangsinstallieren (ExtensionInstallForcelist oder ExtensionSettings)\n2. Optional `server_url`, `api_key` und `lang` (de, en, fr, es) als verwaltete Konfiguration der Extension setzen\n3. Policy den Ziel-Gerätegruppen zuweisen\n\nDetails: siehe MDM-Guide im Dashboard.',
         },
         api_keys: {
           heading: 'API-Keys verwalten',
@@ -66,7 +66,7 @@ const de: UserDoc = {
         },
         identity: {
           heading: 'Klarnamen anzeigen',
-          text: 'Events und Geräte erscheinen für alle Rollen nur als Device-Hash. itsec- und infosec-User können unter **Geräte** oder **Events** per „Klarname anzeigen" sehen, wem ein Gerät gehört (Profil-E-Mail bzw. per MDM gesetzte Identität, ab Extension 2.1).\n\nEin Antrag ist nicht nötig, aber jeder Abruf wird mit Benutzername, Gerät, Zeit und IP im Audit-Log protokolliert und ist für den Datenschutz sichtbar.',
+          text: 'Events und Geräte erscheinen für alle Rollen nur als Device-Hash. itsec- und infosec-User können unter **Geräte** oder **Events** per „Klarname anzeigen" sehen, wem ein Gerät gehört (Profil-E-Mail bzw. per MDM gesetzte Identität).\n\nEin Antrag ist nicht nötig, aber jeder Abruf wird mit Benutzername, Gerät, Zeit und IP im Audit-Log protokolliert und ist für den Datenschutz sichtbar.',
         },
         incident: {
           heading: 'Incident Response',

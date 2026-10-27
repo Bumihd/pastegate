@@ -105,7 +105,8 @@ rm -f /etc/cron.d/pastegate-backup /usr/local/bin/pastegate-backup 2>/dev/null |
 
 # ── Remove app directory + SETUP_TOKEN ────────────────────────────
 header "Removing application files"
-rm -f "$INSTALL_DIR/SETUP_TOKEN" 2>/dev/null || true
+rm -f "$INSTALL_DIR/SETUP_TOKEN" /var/lib/pastegate/SETUP_TOKEN 2>/dev/null || true
+rmdir /var/lib/pastegate 2>/dev/null || true
 if [[ -d "$INSTALL_DIR" ]]; then
     rm -rf "$INSTALL_DIR"
     success "App directory removed ($INSTALL_DIR)"

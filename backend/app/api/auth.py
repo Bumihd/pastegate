@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
+from app.api.setup import clear_token_after_login, complete_on_admin_login
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.deps import get_current_user
@@ -137,7 +138,9 @@ def login(body: LoginRequest, request: Request, db: Session = Depends(get_db)):
         action='login',
         ip_address=request.client.host if request.client else None,
     ))
+    complete_on_admin_login(db, user)
     db.commit()
+    clear_token_after_login(db)
 
     token, jti = create_access_token(subject=user.username)
     return LoginResponse(access_token=token, role=user.role.value)

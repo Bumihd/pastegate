@@ -11,11 +11,11 @@ const en: UserDoc = {
         },
         detection: {
           heading: 'How does detection work?',
-          text: 'Pastegate uses more than 80 rule-based patterns (regular expressions) that run locally in the browser. No clear text ever leaves the client. Only anonymised metadata is reported to the server: rule and severity, the action taken, the domain (e.g. claude.ai) and a SHA-256 hash of the full URL.',
+          text: 'Pastegate uses 100 rule-based patterns (regular expressions) that run locally in the browser. No clear text ever leaves the client. Only anonymised metadata is reported to the server: rule and severity, the action taken, the domain (e.g. claude.ai) and a SHA-256 hash of the full URL.',
         },
         severity: {
           heading: 'Severity levels',
-          text: 'Critical: AWS/GCP/Azure keys, private keys, passwords in clear text\nHigh: GitHub/GitLab tokens, JWTs, generic API keys\nMedium: email addresses, IBANs, credit card numbers\nLow: possibly sensitive content (heuristic detection)',
+          text: 'The built-in rules use three levels:\nCritical: AWS, Azure, OpenAI and Anthropic keys, GitHub/GitLab tokens, private keys, database connection strings, passwords in URLs, credit card numbers, German ID card and passport numbers, social security numbers (DE, AT, CH, US, UK)\nHigh: JWTs, bearer tokens, Slack tokens, passwords and secrets in text, IBANs, tax ID (DE)\nMedium: AWS ARNs, Stripe test keys, Sentry DSNs, VAT IDs, phone numbers with a name, high-entropy strings (heuristic)',
         },
         language: {
           heading: 'Language of the extension',
@@ -28,7 +28,7 @@ const en: UserDoc = {
       items: {
         install: {
           heading: 'Installation',
-          text: 'Pastegate is installed with a single script. It sets up PostgreSQL, the FastAPI backend, the React dashboard and nginx automatically.',
+          text: 'The installer asks for your domain or IP address and the TLS mode: your own certificate, Let\'s Encrypt, self-signed, or running behind a reverse proxy or gateway (TLS terminates there; Pastegate itself serves HTTP only). If Podman or Docker is available, the app and the database run as containers; otherwise everything is installed directly on the system.\n\nAt the end it shows a **setup URL** and a **setup token**:\n1. Open `https://<your-domain>/setup` in your browser\n2. Enter the setup token\n3. Create the admin account and the first API key in the setup wizard\n\nAll options: `bash install.sh --help`',
           code: 'sudo bash install.sh',
         },
         org_language: {
@@ -41,7 +41,7 @@ const en: UserDoc = {
         },
         mdm: {
           heading: 'MDM deployment (Intune, Jamf, GPO)',
-          text: '1. Force-install the extension via Chrome policy (ExtensionInstallForcelist or ExtensionSettings)\n2. Optionally provide `server_url`, `api_key` and `lang` (de, en, fr, es) as managed configuration of the extension\n3. Assign the policy to the target device groups\n\nDetails: see the MDM guide in the dashboard.',
+          text: '1. Force-install the extension via Chrome or Edge policy (ExtensionInstallForcelist or ExtensionSettings)\n2. Optionally provide `server_url`, `api_key` and `lang` (de, en, fr, es) as managed configuration of the extension\n3. Assign the policy to the target device groups\n\nDetails: see the MDM guide in the dashboard.',
         },
         api_keys: {
           heading: 'Manage API keys',
@@ -66,7 +66,7 @@ const en: UserDoc = {
         },
         identity: {
           heading: 'Showing identities',
-          text: 'Events and devices appear as a device hash for every role. itsec and infosec users can use “Show identity” under **Devices** or **Events** to see who a device belongs to (profile e-mail or an identity set via MDM, extension 2.1 or newer).\n\nNo request is needed, but every lookup is recorded in the audit log with username, device, time and IP and is visible to data privacy.',
+          text: 'Events and devices appear as a device hash for every role. itsec and infosec users can use “Show identity” under **Devices** or **Events** to see who a device belongs to (profile e-mail or an identity set via MDM).\n\nNo request is needed, but every lookup is recorded in the audit log with username, device, time and IP and is visible to data privacy.',
         },
         incident: {
           heading: 'Incident response',

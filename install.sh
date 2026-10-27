@@ -25,10 +25,15 @@
 #   --trusted-proxy <ip[,ip]> Upstream proxies whose client IP header is trusted
 #   --real-ip-header <name>   Header carrying the client IP (default X-Forwarded-For,
 #                             behind Cloudflare: CF-Connecting-IP)
+#   --container-subnet <cidr> Network of the app containers (default 10.231.250.0/24;
+#                             --update keeps the subnet of the existing compose.yml)
 #   --cert-fullchain <path>   Path to fullchain.pem  (--tls own only)
 #   --cert-key <path>         Path to privkey.pem    (--tls own only)
 #   --email <addr>            Contact email for Let's Encrypt
 #   --db-pass <pw>            PostgreSQL password (randomly generated otherwise)
+#   --update                  Update an existing installation in place: code,
+#                             dependencies, dashboard, DB migrations, permissions,
+#                             systemd unit. Keeps nginx, TLS, .env and the database.
 #   --yes                     No prompts (non-interactive; use defaults)
 #   -h | --help               Show this help
 
@@ -43,15 +48,18 @@ warn()    { echo -e "${YELLOW}  warn${RESET} $*"; }
 error()   { echo -e "${RED}  error${RESET} $*"; exit 1; }
 header()  { echo -e "\n${BOLD}── $* ${RESET}"; }
 
-usage() { sed -n '2,40p' "$0" | sed 's/^# \{0,1\}//'; exit 0; }
+usage() { awk 'NR > 1 && !/^#/ { exit } NR > 1 { sub(/^# ?/, ""); print }' "$0"; exit 0; }
 
 INSTALL_DIR=/opt/pastegate
+STATE_DIR=/var/lib/pastegate   # SETUP_TOKEN; native: systemd StateDirectory of the service
+CONTAINER_UID=10001            # app user in the container image (APP_UID in write_dockerfile)
+CONTAINER_SUBNET=""            # compose network of the app (--container-subnet, see write_compose)
 SRC_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # ── Defaults / Flags ──────────────────────────────────────────────
 DOMAIN=""; SERVER_IP=""; RUNTIME="auto"; TLS_MODE=""
 CERT_FULLCHAIN=""; CERT_KEY=""; LE_EMAIL=""
-DB_PASS=""; ASSUME_YES="no"
+DB_PASS=""; ASSUME_YES="no"; UPDATE="no"
 TRUSTED_PROXY=""; REAL_IP_HEADER="X-Forwarded-For"
 
 while [[ $# -gt 0 ]]; do
@@ -66,11 +74,25 @@ while [[ $# -gt 0 ]]; do
         --db-pass)        DB_PASS="$2"; shift 2;;
         --trusted-proxy)  TRUSTED_PROXY="$2"; shift 2;;
         --real-ip-header) REAL_IP_HEADER="$2"; shift 2;;
+        --container-subnet) CONTAINER_SUBNET="$2"; shift 2;;
+        --update)         UPDATE="yes"; shift;;
         --yes|-y)         ASSUME_YES="yes"; shift;;
         -h|--help)        usage;;
         *) error "Unknown argument: $1 (see --help)";;
     esac
 done
+
+# Container network: --container-subnet, else the subnet of an existing
+# compose.yml (--update), else the default. The gateway (first address) is
+# where the host nginx connects from – the only address FORWARDED_ALLOW_IPS trusts.
+[[ -z "$CONTAINER_SUBNET" && -f "$INSTALL_DIR/compose.yml" ]] \
+    && CONTAINER_SUBNET="$(sed -n 's/^ *- subnet: *//p' "$INSTALL_DIR/compose.yml" | head -1)"
+CONTAINER_SUBNET="${CONTAINER_SUBNET:-10.231.250.0/24}"
+__octet='(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])'   # 0-255, no leading zeros
+[[ "$CONTAINER_SUBNET" =~ ^${__octet}\.${__octet}\.${__octet}\.${__octet}/([1-9][0-9]?)$ ]] \
+    && (( BASH_REMATCH[5] >= 8 && BASH_REMATCH[5] <= 30 && BASH_REMATCH[4] <= 253 )) \
+    || error "Invalid --container-subnet: $CONTAINER_SUBNET (expected a network like 10.231.250.0/24, prefix /8 to /30)"
+CONTAINER_GATEWAY="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}.$(( BASH_REMATCH[4] + 1 ))"
 
 ask() {  # ask <varname> <prompt> [default]  – honours --yes
     local __var="$1" __prompt="$2" __def="${3:-}" __val
@@ -122,60 +144,77 @@ RUNTIME_EFF="$(detect_runtime)"
 info "Runtime:         ${RUNTIME_EFF}$( [[ "$RUNTIME" == auto ]] && echo ' (auto-detected)' )"
 echo ""
 
-ask DOMAIN    "Domain (e.g. pastegate.example.com)"
-ask SERVER_IP "Additional server IP (optional, press Enter to skip)" " "
-SERVER_IP="${SERVER_IP// /}"
-[[ -z "$DOMAIN" ]] && error "Domain must not be empty."
-
-if [[ -z "$TLS_MODE" ]]; then
-    echo ""
-    echo "  TLS certificate mode:"
-    echo "    1) own certificate (provide fullchain + privkey)"
-    echo "    2) Let's Encrypt (certbot; requires public DNS + ports 80/443)"
-    echo "    3) self-signed (internal / testing)"
-    echo "    4) behind a proxy that terminates TLS (gateway, Cloudflare, load balancer)"
-    if [[ "$ASSUME_YES" == "yes" ]]; then TLS_MODE="selfsigned"; else
-        read -rp "  Choice [1/2/3/4] (default: 3): " __tls
-        case "${__tls:-3}" in 1) TLS_MODE="own";; 2) TLS_MODE="letsencrypt";; 4) TLS_MODE="proxy";; *) TLS_MODE="selfsigned";; esac
+if [[ "$UPDATE" == "yes" ]]; then
+    # Update: no questions. Domain, TLS, nginx, secrets, DB password and the
+    # setup token of the existing installation stay as they are.
+    [[ -f "$INSTALL_DIR/backend/.env" ]] || error "No installation found in $INSTALL_DIR (backend/.env is missing)."
+    if [[ "$RUNTIME" == "auto" && ! -f "$INSTALL_DIR/compose.yml" ]]; then RUNTIME_EFF="native"; fi
+    info "Updating the existing installation in $INSTALL_DIR (runtime: $RUNTIME_EFF)"
+    if [[ "$ASSUME_YES" != "yes" ]]; then
+        read -rp "  Continue? [y/N]: " CONFIRM
+        [[ "${CONFIRM,,}" != 'y' ]] && { echo "Aborted."; exit 0; }
     fi
-fi
+else
+    # A fresh install writes a new .env (SECRET_KEY, HMAC_SALT): on an existing
+    # installation that would invalidate every API key and device hash.
+    [[ -f "$INSTALL_DIR/backend/.env" ]] \
+        && error "Existing installation found in $INSTALL_DIR. Use --update (a fresh install would replace SECRET_KEY and HMAC_SALT)."
 
-case "$TLS_MODE" in
-    own)
-        ask CERT_FULLCHAIN "Path to fullchain.pem"
-        ask CERT_KEY       "Path to privkey.pem"
-        [[ -f "$CERT_FULLCHAIN" ]] || error "Certificate not found: $CERT_FULLCHAIN"
-        [[ -f "$CERT_KEY"       ]] || error "Private key not found: $CERT_KEY"
-        ;;
-    letsencrypt)
-        ask LE_EMAIL "Contact email for Let's Encrypt"
-        [[ -z "$LE_EMAIL" ]] && error "Let's Encrypt requires a contact email."
-        ;;
-    selfsigned) ;;
-    proxy)
-        ask TRUSTED_PROXY "IP of the upstream proxy (for real client IPs, Enter = none)" " "
-        TRUSTED_PROXY="${TRUSTED_PROXY// /}"
-        ;;
-    *) error "Invalid TLS mode: $TLS_MODE (own|letsencrypt|selfsigned|proxy)";;
-esac
+    ask DOMAIN    "Domain (e.g. pastegate.example.com)"
+    ask SERVER_IP "Additional server IP (optional, press Enter to skip)" " "
+    SERVER_IP="${SERVER_IP// /}"
+    [[ -z "$DOMAIN" ]] && error "Domain must not be empty."
 
-# DB password: generate a cryptographically random one if not provided
-if [[ -z "$DB_PASS" ]]; then
-    DB_PASS="$(openssl rand -hex 24 2>/dev/null || head -c18 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9')"
-fi
+    if [[ -z "$TLS_MODE" ]]; then
+        echo ""
+        echo "  TLS certificate mode:"
+        echo "    1) own certificate (provide fullchain + privkey)"
+        echo "    2) Let's Encrypt (certbot; requires public DNS + ports 80/443)"
+        echo "    3) self-signed (internal / testing)"
+        echo "    4) behind a proxy that terminates TLS (gateway, Cloudflare, load balancer)"
+        if [[ "$ASSUME_YES" == "yes" ]]; then TLS_MODE="selfsigned"; else
+            read -rp "  Choice [1/2/3/4] (default: 3): " __tls
+            case "${__tls:-3}" in 1) TLS_MODE="own";; 2) TLS_MODE="letsencrypt";; 4) TLS_MODE="proxy";; *) TLS_MODE="selfsigned";; esac
+        fi
+    fi
 
-PROTO="https"  # The phase 1 installer always terminates TLS at the reverse proxy
+    case "$TLS_MODE" in
+        own)
+            ask CERT_FULLCHAIN "Path to fullchain.pem"
+            ask CERT_KEY       "Path to privkey.pem"
+            [[ -f "$CERT_FULLCHAIN" ]] || error "Certificate not found: $CERT_FULLCHAIN"
+            [[ -f "$CERT_KEY"       ]] || error "Private key not found: $CERT_KEY"
+            ;;
+        letsencrypt)
+            ask LE_EMAIL "Contact email for Let's Encrypt"
+            [[ -z "$LE_EMAIL" ]] && error "Let's Encrypt requires a contact email."
+            ;;
+        selfsigned) ;;
+        proxy)
+            ask TRUSTED_PROXY "IP of the upstream proxy (for real client IPs, Enter = none)" " "
+            TRUSTED_PROXY="${TRUSTED_PROXY// /}"
+            ;;
+        *) error "Invalid TLS mode: $TLS_MODE (own|letsencrypt|selfsigned|proxy)";;
+    esac
 
-echo ""
-info "Domain:    $DOMAIN"
-[[ -n "$SERVER_IP" ]] && info "Server-IP: $SERVER_IP"
-info "Runtime:   $RUNTIME_EFF"
-info "TLS:       $TLS_MODE"
-[[ -n "$TRUSTED_PROXY" ]] && info "Proxy:     $TRUSTED_PROXY ($REAL_IP_HEADER)"
-echo ""
-if [[ "$ASSUME_YES" != "yes" ]]; then
-    read -rp "  Continue? [y/N]: " CONFIRM
-    [[ "${CONFIRM,,}" != 'y' ]] && { echo "Aborted."; exit 0; }
+    # DB password: generate a cryptographically random one if not provided
+    if [[ -z "$DB_PASS" ]]; then
+        DB_PASS="$(openssl rand -hex 24 2>/dev/null || head -c18 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9')"
+    fi
+
+    PROTO="https"  # The phase 1 installer always terminates TLS at the reverse proxy
+
+    echo ""
+    info "Domain:    $DOMAIN"
+    [[ -n "$SERVER_IP" ]] && info "Server-IP: $SERVER_IP"
+    info "Runtime:   $RUNTIME_EFF"
+    info "TLS:       $TLS_MODE"
+    [[ -n "$TRUSTED_PROXY" ]] && info "Proxy:     $TRUSTED_PROXY ($REAL_IP_HEADER)"
+    echo ""
+    if [[ "$ASSUME_YES" != "yes" ]]; then
+        read -rp "  Continue? [y/N]: " CONFIRM
+        [[ "${CONFIRM,,}" != 'y' ]] && { echo "Aborted."; exit 0; }
+    fi
 fi
 
 # ── Reverse proxy: nginx site + TLS (on the host, for both paths) ──
@@ -226,7 +265,11 @@ map $http_x_forwarded_proto $pg_fwd_proto {
 }
 PROTOEOF
 
-    # Real client IP behind an upstream proxy (affects limit_req and X-Forwarded-For)
+    # Real client IP behind an upstream proxy (affects limit_req and X-Forwarded-For).
+    # Forwarded headers are only trusted from the configured --trusted-proxy. The
+    # backend always gets exactly one X-Forwarded-For value, $remote_addr: the real
+    # client (resolved via real_ip) or, without a trusted proxy, the TCP peer.
+    # Client-supplied X-Forwarded-For is never passed on.
     local real_ip=""
     if [[ "$TLS_MODE" == "proxy" && -n "$TRUSTED_PROXY" ]]; then
         local ip
@@ -248,14 +291,14 @@ ${real_ip}
         proxy_pass         http://${upstream};
         proxy_set_header   Host \$host;
         proxy_set_header   X-Real-IP \$remote_addr;
-        proxy_set_header   X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-For \$remote_addr;
         proxy_set_header   X-Forwarded-Proto \$pg_fwd_proto;
     }
     location /api/ {
         proxy_pass         http://${upstream};
         proxy_set_header   Host \$host;
         proxy_set_header   X-Real-IP \$remote_addr;
-        proxy_set_header   X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-For \$remote_addr;
         proxy_set_header   X-Forwarded-Proto \$pg_fwd_proto;
         proxy_read_timeout 30s;
         client_max_body_size 512k;
@@ -287,14 +330,14 @@ server {
         proxy_pass         http://${upstream};
         proxy_set_header   Host \$host;
         proxy_set_header   X-Real-IP \$remote_addr;
-        proxy_set_header   X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-For \$remote_addr;
         proxy_set_header   X-Forwarded-Proto \$scheme;
     }
     location /api/ {
         proxy_pass         http://${upstream};
         proxy_set_header   Host \$host;
         proxy_set_header   X-Real-IP \$remote_addr;
-        proxy_set_header   X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-For \$remote_addr;
         proxy_set_header   X-Forwarded-Proto \$scheme;
         proxy_read_timeout 30s;
         client_max_body_size 512k;
@@ -317,13 +360,13 @@ server {
         limit_req zone=auth_limit burst=3 nodelay;
         proxy_pass http://${upstream};
         proxy_set_header Host \$host;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-For \$remote_addr;
         proxy_set_header X-Forwarded-Proto \$scheme;
     }
     location /api/ {
         proxy_pass http://${upstream};
         proxy_set_header Host \$host;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-For \$remote_addr;
         proxy_set_header X-Forwarded-Proto \$scheme;
         client_max_body_size 512k;
     }
@@ -370,16 +413,31 @@ install_pkgs() {
 # ==================================================================
 #  CONTAINER PATH
 # ==================================================================
-install_container() {
-    header "Container installation (${RUNTIME_EFF})"
-    local CT="$RUNTIME_EFF"
+# Build context filter. Generated (like the Dockerfile) because hidden top-level
+# entries are not copied into $INSTALL_DIR. Keeps secrets out of image layers:
+# the app gets its configuration from compose (env_file), never from a file in the image.
+write_dockerignore() {
+    cat > "$INSTALL_DIR/.dockerignore" << 'IGNOREEOF'
+.env
+.env.*
+**/.env
+**/.env.*
+extension/config.js
+SETUP_TOKEN
+.git
+**/node_modules
+**/__pycache__
+**/.pytest_cache
+docs/
+venv/
+compose.yml
+Dockerfile
+.dockerignore
+IGNOREEOF
+}
 
-    install_app_files
-
-    # .env for the app container
-    FWD_ALLOW_IPS='*' write_env "db" "5432"
-
-    # Dockerfile (multi-stage: build dashboard → python runtime)
+write_dockerfile() {  # multi-stage: build dashboard → python runtime
+    write_dockerignore
     cat > "$INSTALL_DIR/Dockerfile" << 'DOCKEREOF'
 # Stage 1 – build dashboard
 FROM docker.io/library/node:20-alpine AS dashboard
@@ -391,23 +449,73 @@ RUN npm run build
 
 # Stage 2 – Python runtime
 FROM docker.io/library/python:3.12-slim
+# Unprivileged app user. The UID must match CONTAINER_UID in install.sh, which
+# owns the bind-mounted token directory on the host.
+ARG APP_UID=10001
+RUN groupadd --system --gid ${APP_UID} pastegate \
+    && useradd --system --uid ${APP_UID} --gid pastegate --no-create-home \
+       --shell /usr/sbin/nologin pastegate
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends libpq5 curl \
     && rm -rf /var/lib/apt/lists/*
 COPY backend/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
+# Code stays root-owned and read-only for the app user
 COPY backend/ ./
 COPY extension/ /extension/
 # Vite writes the dashboard build to ../backend/static (relative to the dashboard dir).
 # In the build stage that is /backend/static.
 COPY --from=dashboard /backend/static/ ./static/
+RUN python -m compileall -q /app
+ENV PYTHONDONTWRITEBYTECODE=1
+USER pastegate
 EXPOSE 8000
-# Tables are created on app startup via lifespan (create_all); the app serves
-# the SPA itself (StaticFiles mount). uvicorn starts afterwards.
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+# Every start brings the schema to head first (Alembic only, no create_all).
+# An unstamped schema from older container versions is detected and stamped
+# once (app.cli migrate). If the migration fails, uvicorn does not start.
+CMD ["sh", "-c", "python -m app.cli migrate && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2"]
 DOCKEREOF
+}
 
-    # compose.yml
+install_container() {
+    header "Container installation (${RUNTIME_EFF})"
+    local CT="$RUNTIME_EFF"
+
+    install_app_files
+
+    # .env for the app container: uvicorn trusts X-Forwarded-For only from the
+    # host nginx, which reaches the container from the gateway of the compose network
+    FWD_ALLOW_IPS="$CONTAINER_GATEWAY" write_env "db" "5432"
+
+    # Host directory for the SETUP_TOKEN, bind-mounted read-write so the app can
+    # delete the token after setup (podman refuses missing bind sources).
+    prepare_container_state_dir
+
+    write_dockerfile
+    apply_permissions
+    write_compose
+
+    local COMPOSE; COMPOSE="$(compose_cmd)"
+    if [[ -z "$COMPOSE" ]]; then
+        warn "No compose tool found for $CT – attempting installation"
+        if [[ "$CT" == "podman" ]]; then install_pkgs podman-compose || true
+        else install_pkgs docker-compose-plugin || install_pkgs docker-compose || true; fi
+        COMPOSE="$(compose_cmd)"
+        [[ -z "$COMPOSE" ]] && error "compose not available – please install podman-compose or docker compose."
+    fi
+
+    info "Building images and starting containers ($COMPOSE)…"
+    ( cd "$INSTALL_DIR" && $COMPOSE -f compose.yml up -d --build )
+    success "Containers running"
+
+    configure_nginx "127.0.0.1:8000"
+}
+
+# compose.yml (install and update). The app network has a fixed subnet so that
+# the address the host nginx connects from (the network gateway) is known:
+# FORWARDED_ALLOW_IPS trusts exactly that address, never '*'.
+write_compose() {
+    install -m 600 /dev/null "$INSTALL_DIR/compose.yml"   # contains the DB password
     cat > "$INSTALL_DIR/compose.yml" << COMPOSEEOF
 services:
   db:
@@ -418,6 +526,7 @@ services:
       POSTGRES_DB: pastegate
     volumes:
       - pastegate_db:/var/lib/postgresql/data
+    networks: [pastegate]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U pastegate"]
       interval: 5s
@@ -434,25 +543,55 @@ services:
         condition: service_healthy
     ports:
       - "127.0.0.1:8000:8000"
+    volumes:
+      - ${STATE_DIR}:/var/lib/pastegate:Z
+    networks: [pastegate]
     restart: unless-stopped
+networks:
+  pastegate:
+    ipam:
+      config:
+        - subnet: ${CONTAINER_SUBNET}
+          gateway: ${CONTAINER_GATEWAY}
 volumes:
   pastegate_db:
 COMPOSEEOF
+}
 
+# The app runs as CONTAINER_UID (rootful podman/docker: same UID on the host),
+# so the bind-mounted token directory belongs to that UID. ':Z' in compose.yml
+# gives it the container's SELinux label (no-op without SELinux).
+prepare_container_state_dir() {
+    mkdir -p "$STATE_DIR"
+    chown -R "$CONTAINER_UID:$CONTAINER_UID" "$STATE_DIR"
+    chmod 700 "$STATE_DIR"
+}
+
+# Update of a container installation: the DB password (from the existing
+# compose.yml) and .env stay; compose.yml itself is regenerated.
+update_container() {
+    header "Container update (${RUNTIME_EFF})"
     local COMPOSE; COMPOSE="$(compose_cmd)"
-    if [[ -z "$COMPOSE" ]]; then
-        warn "No compose tool found for $CT – attempting installation"
-        if [[ "$CT" == "podman" ]]; then install_pkgs podman-compose || true
-        else install_pkgs docker-compose-plugin || install_pkgs docker-compose || true; fi
-        COMPOSE="$(compose_cmd)"
-        [[ -z "$COMPOSE" ]] && error "compose not available – please install podman-compose or docker compose."
-    fi
+    [[ -z "$COMPOSE" ]] && error "compose not available – please install podman-compose or docker compose."
+    [[ -f "$INSTALL_DIR/compose.yml" ]] || error "$INSTALL_DIR/compose.yml not found – not a container installation?"
+    DB_PASS="$(sed -n 's/^ *POSTGRES_PASSWORD: *//p' "$INSTALL_DIR/compose.yml" | head -1)"
+    [[ -n "$DB_PASS" ]] || error "POSTGRES_PASSWORD not found in $INSTALL_DIR/compose.yml."
 
-    info "Building images and starting containers ($COMPOSE)…"
-    ( cd "$INSTALL_DIR" && $COMPOSE -f compose.yml up -d --build )
+    install_app_files
+    prepare_container_state_dir
+    # Older versions trusted X-Forwarded-For from everyone ('*')
+    sed -i "s/^FORWARDED_ALLOW_IPS=.*/FORWARDED_ALLOW_IPS=${CONTAINER_GATEWAY}/" "$INSTALL_DIR/backend/.env"
+
+    write_dockerfile
+    apply_permissions
+    write_compose
+
+    info "Rebuilding images and restarting containers ($COMPOSE)…"
+    # 'down' (containers + network, never volumes) before 'up': otherwise compose may
+    # keep a network with an old subnet, and FORWARDED_ALLOW_IPS would not match it.
+    ( cd "$INSTALL_DIR" && $COMPOSE -f compose.yml build \
+        && $COMPOSE -f compose.yml down && $COMPOSE -f compose.yml up -d )
     success "Containers running"
-
-    configure_nginx "127.0.0.1:8000"
 }
 
 # ==================================================================
@@ -506,13 +645,16 @@ install_native() {
         || sudo -u postgres psql -c "CREATE DATABASE pastegate OWNER pastegate;" 2>/dev/null
     success "PostgreSQL configured"
 
-    # System user
+    # System user with its own dedicated group (.env is group-readable for it,
+    # so the group must not be shared with anyone else)
+    getent group pastegate &>/dev/null || groupadd --system pastegate
     if ! id pastegate &>/dev/null; then
-        useradd --system --no-create-home --shell /usr/sbin/nologin pastegate 2>/dev/null \
-            || useradd --system --shell /sbin/nologin pastegate 2>/dev/null || true
+        useradd --system -g pastegate --no-create-home --shell /usr/sbin/nologin pastegate 2>/dev/null \
+            || useradd --system -g pastegate --shell /sbin/nologin pastegate 2>/dev/null || true
     fi
 
     install_app_files
+    apply_permissions   # before any installed code runs
 
     info "Setting up Python environment…"
     python3 -m venv "$INSTALL_DIR/venv"
@@ -525,28 +667,120 @@ install_native() {
     success "Dashboard built"
 
     write_env "localhost" "5432"
+    apply_permissions   # .env root:pastegate 640, so the service user can read it
 
     header "Database schema"
-    # Schema bootstrap: create tables from the models (idempotent), then stamp
-    # the Alembic revision to head. Future changes go through
-    # 'alembic revision --autogenerate' + 'alembic upgrade head'.
-    ( cd "$INSTALL_DIR/backend" && "$INSTALL_DIR/venv/bin/python3" -c "
-import sys; sys.path.insert(0, '.')
-from app.core.database import Base, engine
-import app.models.models  # noqa: F401  – registers all tables
-Base.metadata.create_all(bind=engine)
-print('Schema created.')
-" )
-    ( cd "$INSTALL_DIR/backend" && "$INSTALL_DIR/venv/bin/alembic" stamp head ) 2>/dev/null \
-        || warn "alembic stamp failed – schema updates may need to be applied manually later."
+    # Alembic is the only source of the schema: on the empty database 0001
+    # creates the baseline, the later migrations bring it to head.
+    run_alembic upgrade head
+    success "Schema created (alembic head)"
 
-    # Permissions
-    chown -R pastegate:pastegate "$INSTALL_DIR/backend"
-    # The service must be able to read extension/ (the extension builder copies from it)
-    chown -R pastegate:pastegate "$INSTALL_DIR/extension"
-    chmod 600 "$INSTALL_DIR/backend/.env"
-    chmod -R 755 "$INSTALL_DIR/backend/static" 2>/dev/null || true
+    compile_python
+    apply_permissions
+    write_service_unit
+    systemctl enable pastegate
+    restart_service
 
+    configure_nginx "127.0.0.1:8000"
+    setup_native_backup
+}
+
+# Update of a native installation: no packages, no nginx, no secrets.
+update_native() {
+    header "Native update"
+    systemctl cat pastegate &>/dev/null || error "pastegate.service not found – not a native installation?"
+
+    # Nothing running as the service user may touch the tree while it is replaced
+    # (before 0.1.1 the service owned backend/). The service is down until the end.
+    systemctl stop pastegate
+    if command -v pkill &>/dev/null; then pkill -KILL -u pastegate || true; fi
+
+    install_app_files
+    apply_permissions   # before any installed code runs
+
+    info "Updating Python dependencies…"
+    "$INSTALL_DIR/venv/bin/pip" install --quiet -r "$INSTALL_DIR/backend/requirements.txt"
+    success "Python dependencies updated"
+
+    header "Building dashboard"
+    ( cd "$INSTALL_DIR/dashboard" && npm install --silent && npm run build --silent )
+    success "Dashboard built"
+
+    header "Database migrations"
+    local current
+    current="$(run_alembic current 2>/dev/null | awk '{print $1}' | tail -1)"
+    [[ -z "$current" ]] && error "No Alembic revision recorded – migrate manually ('alembic stamp <rev>', then 'alembic upgrade head')."
+    info "Current revision: $current"
+    run_alembic upgrade head
+    success "Schema up to date"
+
+    compile_python
+    apply_permissions
+    write_service_unit
+    restart_service
+}
+
+# Migrations run as the service user, never as root: Alembic imports code from
+# backend/ (alembic.ini: prepend_sys_path = .).
+run_alembic() {
+    local cmd=(env PYTHONDONTWRITEBYTECODE=1 "$INSTALL_DIR/venv/bin/alembic" "$@")
+    if command -v runuser &>/dev/null; then
+        # Own session, no stdin: the process must not get root's terminal (TIOCSTI)
+        ( cd "$INSTALL_DIR/backend" && setsid -w runuser -u pastegate -- "${cmd[@]}" </dev/null )
+    else
+        ( cd "$INSTALL_DIR/backend" && su -s /bin/sh pastegate -c "$(printf '%q ' "${cmd[@]}")" </dev/null )
+    fi
+}
+
+# Bytecode is compiled once as root: the service may not write into the code
+# (PYTHONDONTWRITEBYTECODE=1, no ReadWritePaths).
+compile_python() {
+    "$INSTALL_DIR/venv/bin/python3" -m compileall -q "$INSTALL_DIR/backend" >/dev/null || true
+}
+
+# Permission model: code is owned by root and only readable for everyone else
+# (dirs 755, files 644, executables 755). The service needs no writable path
+# under $INSTALL_DIR – temp files go to PrivateTmp, the setup token to
+# $STATE_DIR. Restricted: .env root:pastegate 640 (the app reads it) and the
+# container's compose.yml root 600 (DB password).
+# Symlinks are never passed to chmod: chmod would change the file they point to.
+apply_permissions() {
+    header "Setting permissions"
+    local env="$INSTALL_DIR/backend/.env" compose="$INSTALL_DIR/compose.yml"
+    local env_group=root env_mode=600
+    if id pastegate &>/dev/null; then
+        # Group read only for the dedicated group – never for a shared primary group
+        [[ "$(id -gn pastegate)" == "pastegate" ]] \
+            || error "Primary group of user 'pastegate' is '$(id -gn pastegate)', expected 'pastegate' – .env would be readable for that group. Fix with: usermod -g pastegate pastegate"
+        env_group=pastegate; env_mode=640
+    fi                                          # else container: only compose (root) reads .env
+    # chown/chmod on a single path follow symlinks: a .env replaced by a link (e.g.
+    # by the service user while it still owned backend/) would hand the target to
+    # pastegate. Both secrets must be plain files with exactly one link.
+    local f
+    for f in "$env" "$compose"; do
+        if [[ -L "$f" ]] || { [[ -e "$f" ]] && { [[ ! -f "$f" ]] || [[ "$(stat -c %h "$f")" != 1 ]]; }; }; then
+            error "$f is a symlink, hard link or not a regular file – refusing to continue. Check the installation for tampering."
+        fi
+    done
+    # Secrets first and never through the recursive chmod (they would be 644 in between)
+    [[ -f "$env" ]] && { chown "root:$env_group" "$env"; chmod "$env_mode" "$env"; }
+    [[ -f "$compose" ]] && { chown root:root "$compose"; chmod 600 "$compose"; }
+    chown -R root:root "$INSTALL_DIR"
+    [[ -f "$env" ]] && chgrp "$env_group" "$env"
+    find "$INSTALL_DIR" ! -type l ! -path "$env" ! -path "$compose" -exec chmod u=rwX,go=rX {} +
+    success "Code root:root (755/644)$([[ -f "$env" ]] && echo ", .env $(stat -c '%U:%G %a' "$env")")"
+}
+
+restart_service() {
+    systemctl restart pastegate
+    sleep 3
+    systemctl is-active --quiet pastegate \
+        && success "pastegate.service is running" \
+        || error "Service did not start – check: journalctl -u pastegate -n 50"
+}
+
+write_service_unit() {
     header "systemd-Service"
     cat > /etc/systemd/system/pastegate.service << SVCEOF
 [Unit]
@@ -565,34 +799,67 @@ Restart=on-failure
 RestartSec=5
 NoNewPrivileges=true
 PrivateTmp=true
+StateDirectory=pastegate
+StateDirectoryMode=0700
 ProtectSystem=strict
-ReadWritePaths=${INSTALL_DIR}/backend
+Environment=PYTHONDONTWRITEBYTECODE=1
 
 [Install]
 WantedBy=multi-user.target
 SVCEOF
     systemctl daemon-reload
-    systemctl enable pastegate
-    systemctl restart pastegate
-    sleep 3
-    systemctl is-active --quiet pastegate \
-        && success "pastegate.service is running" \
-        || error "Service did not start – check: journalctl -u pastegate -n 50"
-
-    configure_nginx "127.0.0.1:8000"
-    setup_native_backup
 }
 
 # ── Shared helpers ────────────────────────────────────────────────
+# Not part of an installation: every hidden entry at the top level of the
+# source (repository and tooling metadata – nothing there is read at runtime),
+# internal docs, dev scripts, local notes, and secrets/build output. The .env
+# of an existing installation is never overwritten (the source's .env is excluded).
+INSTALL_EXCLUDES=(
+    './.*' ./docs ./scripts './*.local.md'
+    ./backend/.env ./extension/config.js
+    node_modules __pycache__ .pytest_cache
+)
+# Left behind by older versions (copied with 'cp -r') – removed on install/update,
+# together with every hidden top-level entry of $INSTALL_DIR
+STALE_PATHS=(docs scripts SETUP_TOKEN)
+
+# Symlinks in the source are refused: a link like extension/x -> ../backend/.env
+# would be copied as-is and could expose files when permissions are set.
+# node_modules is never copied (excluded) and may contain links.
+check_source_symlinks() {
+    local links
+    links="$(find "$SRC_DIR" -mindepth 1 \( -path "$SRC_DIR/.*" -o -name node_modules \) -prune \
+             -o -type l -print)"
+    [[ -z "$links" ]] || error "The source contains symlinks – refusing to install:"$'\n'"$links"
+}
+
 install_app_files() {
     header "Installing application"
     mkdir -p "$INSTALL_DIR"
-    if [[ "$SRC_DIR" != "$INSTALL_DIR" ]]; then
+    if [[ "$SRC_DIR" == "$INSTALL_DIR" ]]; then
+        warn "Running from $INSTALL_DIR itself – nothing copied, repository files stay in place."
+    else
+        check_source_symlinks
         info "Copying files to $INSTALL_DIR…"
-        cp -r "$SRC_DIR/." "$INSTALL_DIR/"
+        # Start from empty code directories: tar would keep files that are no
+        # longer (or never were) in the source – e.g. planted by the service
+        # account while it still owned backend/ (layout before 0.1.1).
+        # The directory itself goes back to root first, so nobody else can add
+        # entries between the cleanup and the extraction.
+        if [[ -d "$INSTALL_DIR/backend" && ! -L "$INSTALL_DIR/backend" ]]; then
+            chown -h root:root "$INSTALL_DIR/backend"; chmod 755 "$INSTALL_DIR/backend"
+            find "$INSTALL_DIR/backend" -mindepth 1 -maxdepth 1 ! -name .env -exec rm -rf {} +
+        fi
+        rm -rf "${INSTALL_DIR:?}/extension"
+        local excludes=() p
+        for p in "${INSTALL_EXCLUDES[@]}"; do excludes+=(--exclude="$p"); done
+        tar -C "$SRC_DIR" "${excludes[@]}" -cf - . | tar -C "$INSTALL_DIR" --no-same-owner -xf -
+        for p in "${STALE_PATHS[@]}"; do rm -rf "${INSTALL_DIR:?}/$p"; done
+        find "$INSTALL_DIR" -mindepth 1 -maxdepth 1 -name '.*' -exec rm -rf {} +
     fi
-    # Never take over secrets from the source tree
-    rm -f "$INSTALL_DIR/backend/.env" "$INSTALL_DIR/extension/config.js" 2>/dev/null || true
+    # Never ship a generated extension config from the source tree
+    rm -f "$INSTALL_DIR/extension/config.js" 2>/dev/null || true
     success "Files ready"
 }
 
@@ -601,6 +868,8 @@ write_env() {  # write_env <db-host> <db-port>
     local secret_key hmac_salt
     secret_key="$(openssl rand -hex 32)"
     hmac_salt="$(openssl rand -hex 32)"
+    # Create the file as 600 first: 'cat >' alone would leave it 644 until the chmod
+    install -m 600 /dev/null "$INSTALL_DIR/backend/.env"
     cat > "$INSTALL_DIR/backend/.env" << ENV
 DATABASE_URL=postgresql://pastegate:${DB_PASS}@${db_host}:${db_port}/pastegate
 SECRET_KEY=${secret_key}
@@ -656,51 +925,55 @@ BACKUP_SCRIPT
 }
 
 # ── Generate SETUP_TOKEN ──────────────────────────────────────────
+# The token lives in $STATE_DIR and belongs to the account the app runs as
+# (native: pastegate, 600), so the backend can delete it after setup. The file
+# is only cleanup: once setup_state.completed is set in the DB, every setup
+# endpoint answers 403, token or not.
 write_setup_token() {
     header "Generating setup token"
     SETUP_TOKEN="$(openssl rand -hex 32)"
-    echo -n "$SETUP_TOKEN" > "$INSTALL_DIR/SETUP_TOKEN"
-    # Owner stays root. So that the backend service (user 'pastegate') can read
-    # the token AND empty it at the end of setup (the app directory is not owned
-    # by the service, so deleting it is not possible), the native setup makes it
-    # group-readable and -writable (root:pastegate 660).
-    # In the container the app runs as root and reads the read-only mount (600 suffices).
-    if getent group pastegate &>/dev/null; then
-        chown root:pastegate "$INSTALL_DIR/SETUP_TOKEN" 2>/dev/null || true
-        chmod 660 "$INSTALL_DIR/SETUP_TOKEN"
-    else
-        chown root:root "$INSTALL_DIR/SETUP_TOKEN" 2>/dev/null || true
-        chmod 600 "$INSTALL_DIR/SETUP_TOKEN"
-    fi
-    success "SETUP_TOKEN written to $INSTALL_DIR/SETUP_TOKEN"
-}
-
-# Container: mount SETUP_TOKEN into the app container so /setup can read it.
-mount_setup_token_container() {
-    # Add a read-only volume for the token file to compose.yml (idempotent)
-    if ! grep -q 'SETUP_TOKEN:ro' "$INSTALL_DIR/compose.yml" 2>/dev/null; then
-        # mount the volume below the app ports
-        sed -i "/127.0.0.1:8000:8000/a\\    volumes:\n      - ${INSTALL_DIR}/SETUP_TOKEN:/app/SETUP_TOKEN:ro" "$INSTALL_DIR/compose.yml"
-        local COMPOSE; COMPOSE="$(compose_cmd)"
-        [[ -n "$COMPOSE" ]] && ( cd "$INSTALL_DIR" && $COMPOSE -f compose.yml up -d ) || true
-    fi
+    local owner="$CONTAINER_UID"   # container: app user of the image (bind mount $STATE_DIR)
+    [[ "$RUNTIME_EFF" == "native" ]] && owner=pastegate
+    mkdir -p "$STATE_DIR"
+    chown "$owner:$owner" "$STATE_DIR"; chmod 700 "$STATE_DIR"
+    ( umask 077; echo -n "$SETUP_TOKEN" > "$STATE_DIR/SETUP_TOKEN" )
+    chown "$owner:$owner" "$STATE_DIR/SETUP_TOKEN"; chmod 600 "$STATE_DIR/SETUP_TOKEN"
+    # Token location of older versions – no longer read by the backend
+    rm -f "$INSTALL_DIR/SETUP_TOKEN"
+    success "SETUP_TOKEN written to $STATE_DIR/SETUP_TOKEN"
 }
 
 # ==================================================================
 #  Main flow
 # ==================================================================
+connectivity_test() {
+    header "Connectivity test"
+    sleep 2
+    API_CODE=$(curl -sk -o /dev/null -w "%{http_code}" "http://127.0.0.1:8000/api/v1/ping" 2>/dev/null || echo "000")
+    [[ "$API_CODE" == "200" ]] && success "Backend reachable (port 8000)" \
+        || warn "Backend not responding (HTTP $API_CODE) – check (container: logs / native: journalctl -u pastegate)"
+}
+
+if [[ "$UPDATE" == "yes" ]]; then
+    case "$RUNTIME_EFF" in
+        podman|docker) update_container;;
+        native)        update_native;;
+        *)             error "Unknown runtime: $RUNTIME_EFF";;
+    esac
+    connectivity_test
+    echo ""
+    echo -e "${GREEN}  Pastegate update complete${RESET} (nginx, TLS, .env and data unchanged)"
+    echo ""
+    exit 0
+fi
+
 case "$RUNTIME_EFF" in
-    podman|docker) install_container; write_setup_token; mount_setup_token_container;;
+    podman|docker) install_container; write_setup_token;;
     native)        install_native;    write_setup_token;;
     *)             error "Unknown runtime: $RUNTIME_EFF";;
 esac
 
-# ── Connectivity test ─────────────────────────────────────────────
-header "Connectivity test"
-sleep 2
-API_CODE=$(curl -sk -o /dev/null -w "%{http_code}" "http://127.0.0.1:8000/api/v1/ping" 2>/dev/null || echo "000")
-[[ "$API_CODE" == "200" ]] && success "Backend reachable (port 8000)" \
-    || warn "Backend not responding (HTTP $API_CODE) – check (container: logs / native: journalctl -u pastegate)"
+connectivity_test
 
 # ── Summary ───────────────────────────────────────────────────────
 echo ""
@@ -716,14 +989,17 @@ echo -e "  ${YELLOW}${SETUP_TOKEN}${RESET}"
 echo ""
 echo -e "  Open ${PROTO}://${DOMAIN}/setup and enter the token"
 echo -e "  to create the first admin account."
+echo -e "  /setup is locked for good (also with the token) as soon as the wizard is"
+echo -e "  finished or an admin logs in for the first time."
 echo ""
-echo -e "  Token file:  ${INSTALL_DIR}/SETUP_TOKEN (chmod 600, root)"
+echo -e "  Token file:  ${STATE_DIR}/SETUP_TOKEN (chmod 600, deleted after setup)"
 echo -e "  Runtime:     ${RUNTIME_EFF}"
 if [[ "$RUNTIME_EFF" == "native" ]]; then
     echo -e "  Logs:        journalctl -u pastegate -f"
-    echo -e "  Config:      ${INSTALL_DIR}/backend/.env"
+    echo -e "  Config:      ${INSTALL_DIR}/backend/.env (root:pastegate 640)"
 else
     echo -e "  Logs:        cd ${INSTALL_DIR} && $(compose_cmd) logs -f"
 fi
+echo -e "  Update:      sudo bash install.sh --update   (from a new source checkout)"
 echo -e "  Uninstall:   sudo bash ${INSTALL_DIR}/uninstall.sh   (--purge wipes data)"
 echo ""

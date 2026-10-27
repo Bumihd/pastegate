@@ -11,11 +11,11 @@ const es: UserDoc = {
         },
         detection: {
           heading: '¿Cómo funciona la detección?',
-          text: 'Pastegate utiliza más de 80 patrones basados en reglas (expresiones regulares) que se ejecutan localmente en el navegador. Ningún texto en claro sale del equipo. Al servidor solo se envían metadatos anonimizados: regla y nivel de gravedad, la acción realizada, el dominio (p. ej. claude.ai) y un hash SHA-256 de la URL completa.',
+          text: 'Pastegate utiliza 100 patrones basados en reglas (expresiones regulares) que se ejecutan localmente en el navegador. Ningún texto en claro sale del equipo. Al servidor solo se envían metadatos anonimizados: regla y nivel de gravedad, la acción realizada, el dominio (p. ej. claude.ai) y un hash SHA-256 de la URL completa.',
         },
         severity: {
           heading: 'Niveles de gravedad',
-          text: 'Crítico: claves de AWS/GCP/Azure, claves privadas, contraseñas en claro\nAlto: tokens de GitHub/GitLab, JWT, API keys genéricas\nMedio: direcciones de correo, IBAN, números de tarjeta de crédito\nBajo: contenido posiblemente sensible (detección heurística)',
+          text: 'Las reglas integradas usan tres niveles:\nCrítico: claves de AWS, Azure, OpenAI y Anthropic, tokens de GitHub/GitLab, claves privadas, cadenas de conexión a bases de datos, contraseñas en URLs, números de tarjeta de crédito, números de documento de identidad y pasaporte alemanes, números de seguridad social (DE, AT, CH, US, UK)\nAlto: JWT, tokens Bearer, tokens de Slack, contraseñas y secretos en texto, IBAN, número de identificación fiscal (DE)\nMedio: ARN de AWS, claves de prueba de Stripe, DSN de Sentry, números de IVA, números de teléfono con nombre, cadenas de alta entropía (heurística)',
         },
         language: {
           heading: 'Idioma de la extensión',
@@ -28,7 +28,7 @@ const es: UserDoc = {
       items: {
         install: {
           heading: 'Instalación',
-          text: 'Pastegate se instala con un único script, que configura automáticamente PostgreSQL, el backend FastAPI, el dashboard React y nginx.',
+          text: 'El instalador pide el dominio o la dirección IP y el modo TLS: certificado propio, Let\'s Encrypt, autofirmado o funcionamiento detrás de un proxy inverso o gateway (TLS termina allí; Pastegate solo sirve HTTP). Si Podman o Docker están disponibles, la aplicación y la base de datos se ejecutan como contenedores; si no, todo se instala directamente en el sistema.\n\nAl final muestra una **URL de configuración** y un **token de configuración**:\n1. Abra `https://<su-dominio>/setup` en el navegador\n2. Introduzca el token de configuración\n3. Cree la cuenta de administrador y la primera API key en el asistente de configuración\n\nTodas las opciones: `bash install.sh --help`',
           code: 'sudo bash install.sh',
         },
         org_language: {
@@ -41,7 +41,7 @@ const es: UserDoc = {
         },
         mdm: {
           heading: 'Despliegue por MDM (Intune, Jamf, GPO)',
-          text: '1. Forzar la instalación de la extensión mediante Chrome policy (ExtensionInstallForcelist o ExtensionSettings)\n2. Opcional: proporcionar `server_url`, `api_key` y `lang` (de, en, fr, es) como configuración administrada de la extensión\n3. Asignar la policy a los grupos de dispositivos de destino\n\nDetalles: consulte la guía MDM en el dashboard.',
+          text: '1. Forzar la instalación de la extensión mediante una policy de Chrome o Edge (ExtensionInstallForcelist o ExtensionSettings)\n2. Opcional: proporcionar `server_url`, `api_key` y `lang` (de, en, fr, es) como configuración administrada de la extensión\n3. Asignar la policy a los grupos de dispositivos de destino\n\nDetalles: consulte la guía MDM en el dashboard.',
         },
         api_keys: {
           heading: 'Gestionar API keys',
@@ -66,7 +66,7 @@ const es: UserDoc = {
         },
         identity: {
           heading: 'Mostrar identidades',
-          text: 'Los eventos y dispositivos aparecen para todos los roles solo como hash de dispositivo. Los usuarios itsec e infosec pueden usar «Mostrar identidad» en **Dispositivos** o **Eventos** para ver a quién pertenece un dispositivo (correo del perfil o identidad definida por MDM, extensión 2.1 o superior).\n\nNo hace falta ninguna solicitud, pero cada consulta queda registrada en el registro de auditoría con usuario, dispositivo, hora e IP y es visible para protección de datos.',
+          text: 'Los eventos y dispositivos aparecen para todos los roles solo como hash de dispositivo. Los usuarios itsec e infosec pueden usar «Mostrar identidad» en **Dispositivos** o **Eventos** para ver a quién pertenece un dispositivo (correo del perfil o identidad definida por MDM).\n\nNo hace falta ninguna solicitud, pero cada consulta queda registrada en el registro de auditoría con usuario, dispositivo, hora e IP y es visible para protección de datos.',
         },
         incident: {
           heading: 'Respuesta a incidentes',

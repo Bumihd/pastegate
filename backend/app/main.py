@@ -12,8 +12,8 @@ from sqlalchemy.exc import SQLAlchemyError, OperationalError
 
 from app import __version__
 from app.core.config import get_settings
-from app.core.database import Base, engine, SessionLocal
-from app.core import ratelimit, retention
+from app.core.database import SessionLocal
+from app.core import migrations, ratelimit, retention
 from app.core.i18n import _, parse_accept_language, request_lang, translate
 from app.core.logging import configure_logging, new_request_id, request_id_var
 from app.api import admin, auth, config, custom_rules, data, events, meta, setup, sso
@@ -49,7 +49,16 @@ async def lifespan(app: FastAPI):
     log = logging.getLogger('pastegate')
     log.info('startup', extra={'event': 'startup', 'version': app.version})
 
-    Base.metadata.create_all(bind=engine)
+    # The schema comes from Alembic only (app.cli migrate / alembic upgrade head),
+    # never from create_all() here – otherwise new tables appear without their
+    # migration and the revision no longer describes the schema.
+    try:
+        current, head = migrations.current_revision(), migrations.head_revision()
+        if current != head:
+            log.warning('Database schema is not at head – run "python -m app.cli migrate".',
+                        extra={'event': 'schema_outdated', 'current': current, 'head': head})
+    except SQLAlchemyError:
+        log.warning('Schema revision could not be read.', extra={'event': 'schema_check_failed'})
     try:
         run_startup_cleanup()
     except Exception:
@@ -154,21 +163,58 @@ def _login_rate_limited(ip: str) -> bool:
         return ratelimit.hit(db, f'login:{ip}', RATE_LIMIT_MAX, RATE_LIMIT_WINDOW)
 
 
+# Setup: only failed token checks (401) count. Once an IP has RATE_LIMIT_MAX
+# failures in the window, every setup POST is rejected – also with the correct
+# token, otherwise 429 vs. 200 would still tell a guesser which token is right.
+# GET /setup/status is never limited (the dashboard calls it on every page load).
+
+def _setup_failures(ip: str) -> int:
+    with SessionLocal() as db:
+        return ratelimit.count(db, f'setup:{ip}', RATE_LIMIT_WINDOW)
+
+
+def _record_setup_failure(ip: str) -> None:
+    with SessionLocal() as db:
+        ratelimit.hit(db, f'setup:{ip}', RATE_LIMIT_MAX, RATE_LIMIT_WINDOW)
+
+
+def _too_many(message: str) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        content={'detail': _(message, seconds=RATE_LIMIT_WINDOW)},
+        headers={'Retry-After': str(RATE_LIMIT_WINDOW)},
+    )
+
+
 @app.middleware('http')
 async def rate_limit_middleware(request: Request, call_next):
-    if request.url.path in ('/api/v1/auth/login', '/api/v1/auth/ldap/login'):
-        ip = request.client.host if request.client else 'unknown'
+    path = request.url.path
+    ip = request.client.host if request.client else 'unknown'
+
+    if path in ('/api/v1/auth/login', '/api/v1/auth/ldap/login'):
         try:
             limited = await run_in_threadpool(_login_rate_limited, ip)
         except SQLAlchemyError:
             # DB down → login fails anyway; do not additionally block with a 500
             limited = False
         if limited:
-            return JSONResponse(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                content={'detail': _('auth.too_many_login_attempts', seconds=RATE_LIMIT_WINDOW)},
-                headers={'Retry-After': str(RATE_LIMIT_WINDOW)},
-            )
+            return _too_many('auth.too_many_login_attempts')
+
+    elif path.startswith('/api/v1/setup/') and request.method == 'POST':
+        try:
+            limited = await run_in_threadpool(_setup_failures, ip) >= RATE_LIMIT_MAX
+        except SQLAlchemyError:
+            limited = False
+        if limited:
+            return _too_many('setup.too_many_attempts')
+        response = await call_next(request)
+        if response.status_code == status.HTTP_401_UNAUTHORIZED:
+            try:
+                await run_in_threadpool(_record_setup_failure, ip)
+            except SQLAlchemyError:
+                pass
+        return response
+
     return await call_next(request)
 
 
@@ -242,9 +288,9 @@ def healthz():
 
 
 # ── SPA / static files ────────────────────────────────────────────
-# Serves the built dashboard if a static/ build is present.
-# Relevant for container deployments (the app serves the SPA itself). In the
-# native setup nginx serves '/' directly, so this mount never applies there.
+# Serves the built dashboard if a static/ build is present. Applies to every
+# deployment: nginx proxies all paths ('/' and '/api/') to uvicorn and serves
+# no files itself, native as well as container.
 import os as _os
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse

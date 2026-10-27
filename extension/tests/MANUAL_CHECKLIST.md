@@ -82,4 +82,4 @@ In the popup, the user can only choose between the org language and English. Che
 
 - [ ] Chrome: set a policy with `server_url`/`api_key`/`lang` (`manifest.json` -> `storage.managed_schema`),
       `chrome://policy` shows the values without schema errors; the extension picks them up.
-- [ ] Firefox: without a managed manifest the extension starts without errors (managed storage access is guarded).
+- [ ] Firefox (planned, not supported yet): without a managed manifest the extension starts without errors (managed storage access is guarded).

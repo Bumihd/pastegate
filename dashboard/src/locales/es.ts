@@ -324,7 +324,7 @@ const es: Messages = {
   setup_title: 'Configuración inicial',
   setup_subtitle: 'Cree la primera cuenta de administrador y configure la conexión de la extensión.',
   setup_step_token: 'Token de configuración',
-  setup_token_hint: 'El token se mostró en el terminal al final de la instalación (archivo /opt/pastegate/SETUP_TOKEN).',
+  setup_token_hint: 'El token se mostró en el terminal al final de la instalación (archivo /var/lib/pastegate/SETUP_TOKEN).',
   setup_token_label: 'SETUP_TOKEN',
   setup_step_admin: 'Crear cuenta de administrador',
   setup_username: 'Nombre de usuario',

@@ -324,7 +324,7 @@ const en = {
   setup_title: 'Initial setup',
   setup_subtitle: 'Create the first admin account and configure the extension link.',
   setup_step_token: 'Setup token',
-  setup_token_hint: 'The token was shown in the terminal at the end of the installation (file /opt/pastegate/SETUP_TOKEN).',
+  setup_token_hint: 'The token was shown in the terminal at the end of the installation (file /var/lib/pastegate/SETUP_TOKEN).',
   setup_token_label: 'SETUP_TOKEN',
   setup_step_admin: 'Create admin account',
   setup_username: 'Username',

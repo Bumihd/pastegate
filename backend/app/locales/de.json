@@ -27,6 +27,8 @@
   "setup.admin_exists": "Es existiert bereits ein Admin-Account.",
   "setup.no_admin": "Kein Admin-Account vorhanden. Zuerst Admin anlegen.",
   "setup.cannot_complete": "Setup kann nicht abgeschlossen werden: kein Admin angelegt.",
+  "setup.too_many_attempts": "Zu viele Setup-Anfragen. Bitte {seconds} Sekunden warten.",
+  "setup.totp_already_enabled": "Die Zwei-Faktor-Authentifizierung ist bereits aktiv und kann über das Setup nicht geändert werden.",
   "users.username_taken": "Benutzername bereits vergeben.",
   "users.not_found": "Benutzer nicht gefunden.",
   "users.cannot_deactivate_self": "Der eigene Account kann nicht deaktiviert werden.",

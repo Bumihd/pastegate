@@ -1,6 +1,6 @@
 # Pastegate
 
-> **Alpha version (0.1.0-alpha.3).** It works, but it is not finished.
+> **Alpha version (0.1.1-alpha.1).** It works, but it is not finished.
 > Things can still change before version 1.0. Make a backup before you update.
 
 Pastegate stops people from pasting secrets into websites by accident.
@@ -54,9 +54,18 @@ cd pastegate
 sudo bash install.sh
 ```
 
-The installer asks for your domain and how you want HTTPS
-(your own certificate, Let's Encrypt, or self-signed).
+The installer asks for your domain and how you want HTTPS:
+
+- your own certificate
+- Let's Encrypt
+- self-signed
+- behind a reverse proxy or gateway that already handles HTTPS
+  (for example a load balancer or Cloudflare). Pastegate itself then only serves HTTP.
+  The installer also asks for the proxy's IP address, so the logs show the real user IPs.
+
 It uses Podman or Docker if available, otherwise it installs everything directly.
+The container installation was not tested in a real container for this release.
+For production, use the direct installation: `sudo bash install.sh --runtime native`.
 
 At the end it shows a **setup URL** and a **setup token**:
 

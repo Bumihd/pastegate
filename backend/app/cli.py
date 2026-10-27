@@ -3,6 +3,7 @@
 #
 #   python -m app.cli reset-password <username> [--disable-2fa]
 #   python -m app.cli cleanup [--dry-run]
+#   python -m app.cli migrate          (schema to head; container start, installer)
 #
 # For emergencies when no admin can log in anymore. The password is prompted
 # interactively and hidden, never passed as an argument.
@@ -72,6 +73,18 @@ def cleanup(dry_run: bool) -> int:
     return 0
 
 
+def migrate() -> int:
+    """Bring the schema to head. An unstamped schema (older container installation)
+    is first stamped at the revision it matches."""
+    from app.core import migrations
+    adopted, before = migrations.migrate()
+    if adopted:
+        print(f'Unstamped schema detected, stamped as {adopted}.')
+    head = migrations.head_revision()
+    print(f'Schema: {before or "empty"} -> {head}' if before != head else f'Schema up to date ({head}).')
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog='python -m app.cli')
     sub = parser.add_subparsers(dest='command', required=True)
@@ -80,12 +93,15 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument('--disable-2fa', action='store_true', help='also remove the TOTP secret')
     c = sub.add_parser('cleanup', help='Run the retention cleanup now')
     c.add_argument('--dry-run', action='store_true', help='only count stale devices')
+    sub.add_parser('migrate', help='Bring the database schema to the latest revision')
     args = parser.parse_args(argv)
 
     if args.command == 'reset-password':
         return reset_password(args.username, args.disable_2fa)
     if args.command == 'cleanup':
         return cleanup(args.dry_run)
+    if args.command == 'migrate':
+        return migrate()
     return 2
 
 

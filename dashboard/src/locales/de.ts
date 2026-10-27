@@ -324,7 +324,7 @@ const de: Messages = {
   setup_title: 'Ersteinrichtung',
   setup_subtitle: 'Richte den ersten Admin-Account und die Extension-Anbindung ein.',
   setup_step_token: 'Setup-Token',
-  setup_token_hint: 'Das Token wurde am Ende der Installation im Terminal angezeigt (Datei /opt/pastegate/SETUP_TOKEN).',
+  setup_token_hint: 'Das Token wurde am Ende der Installation im Terminal angezeigt (Datei /var/lib/pastegate/SETUP_TOKEN).',
   setup_token_label: 'SETUP_TOKEN',
   setup_step_admin: 'Admin-Account anlegen',
   setup_username: 'Benutzername',
